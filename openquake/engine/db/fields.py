@@ -1,4 +1,4 @@
-# Copyright (c) 2010-2013, GEM Foundation.
+# Copyright (c) 2010-2014, GEM Foundation.
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -15,10 +15,12 @@
 
 """Custom Django field and formfield types (for models and forms."""
 
+import ast
+
 import numpy
 import re
+import zlib
 import json
-
 import cPickle as pickle
 
 from django.utils.encoding import smart_unicode
@@ -151,7 +153,7 @@ class IntArrayField(djm.Field):
 class CharArrayField(djm.Field):
     """This field models a postgres `varchar` array."""
 
-    def db_type(self, _connection):
+    def db_type(self, _connection=None):
         return 'varchar[]'
 
     def to_python(self, value):
@@ -203,6 +205,25 @@ class CharArrayField(djm.Field):
         return super(CharArrayField, self).formfield(**defaults)
 
 
+class LiteralField(djm.Field):
+    """
+    Convert from Postgres TEXT to Python objects and viceversa by using
+    `ast.literal_eval` and `repr`.
+    """
+
+    __metaclass__ = djm.SubfieldBase
+
+    def db_type(self, _connection=None):
+        return 'text'
+
+    def to_python(self, value):
+        if value is not None:
+            return ast.literal_eval(value)
+
+    def get_prep_value(self, value):
+        return repr(value)
+
+
 class PickleField(djm.Field):
     """Field for transparent pickling and unpickling of python objects."""
 
@@ -237,6 +258,24 @@ class PickleField(djm.Field):
         defaults = {'form_class': PickleFormField}
         defaults.update(kwargs)
         return super(PickleField, self).formfield(**defaults)
+
+
+class GzippedField(djm.Field):
+    """
+    Automatically stores gzipped text as a bytearray
+    """
+    __metaclass__ = djm.SubfieldBase
+
+    def db_type(self, _connection):
+        return 'bytea'
+
+    def get_prep_value(self, value):
+        """Compress the value"""
+        return bytearray(zlib.compress(value))
+
+    def to_python(self, value):
+        """Decompress the value"""
+        return zlib.decompress(value)
 
 
 class DictField(PickleField):

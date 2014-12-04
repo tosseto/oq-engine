@@ -1,4 +1,4 @@
-# Copyright (c) 2010-2013, GEM Foundation.
+# Copyright (c) 2010-2014, GEM Foundation.
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -16,19 +16,15 @@
 """
 Core functionality for the Event Based BCR Risk calculator.
 """
-
 from openquake.risklib import workflows
 
-from openquake.engine.calculators.risk import (
-    base, hazard_getters, writers, validation)
-from openquake.engine.calculators.risk.event_based import core as event_based
-from openquake.engine.performance import EnginePerformanceMonitor
-from openquake.engine.db import models
-from django.db import transaction
+from openquake.engine.calculators.risk import writers, validation
+from openquake.engine.calculators.risk.event_based_risk \
+    import core as event_based
+from openquake.engine.calculators import calculators
 
 
-@base.risk_task
-def event_based_bcr(job_id, units, containers, _params):
+def event_based_bcr(workflow, getter, outputdict, params, monitor):
     """
     Celery task for the BCR risk calculator based on the event based
     calculator.
@@ -38,113 +34,71 @@ def event_based_bcr(job_id, units, containers, _params):
 
     :param int job_id:
       ID of the currently running job
-    :param list units:
-      A list of :class:`openquake.risklib.workflows.CalculationUnit` instances
-    :param containers:
+    :param workflow:
+      A :class:`openquake.risklib.workflows.Workflow` instance
+    :param getter:
+      A HazardGetter instance
+    :param outputdict:
       An instance of :class:`..writers.OutputDict` containing
       output container instances (in this case only `BCRDistribution`)
     :param params:
       An instance of :class:`..base.CalcParams` used to compute
       derived outputs
+    :param monitor:
+      A monitor instance
     """
-    def profile(name):
-        return EnginePerformanceMonitor(
-            name, job_id, event_based_bcr, tracing=True)
-
-    # Do the job in other functions, such that it can be unit tested
-    # without the celery machinery
-    with transaction.commit_on_success(using='reslt_writer'):
-        for unit in units:
-            do_event_based_bcr(
-                unit,
-                containers.with_args(loss_type=unit.loss_type),
-                profile)
-
-
-def do_event_based_bcr(unit, containers, profile):
-    """
-    See `event_based_bcr` for docstring
-    """
-    for hazard_output_id, outputs in unit.workflow(
-            unit.loss_type,
-            unit.getter(profile('getting hazard')),
-            profile('computing bcr')):
-
-        with profile('writing results'):
-            containers.write(
-                unit.workflow.assets,
-                outputs,
-                output_type="bcr_distribution",
-                hazard_output_id=hazard_output_id)
+    for loss_type in workflow.loss_types:
+        with monitor('computing risk'):
+            outputs = workflow.compute_all_outputs(getter, loss_type)
+        outputdict = outputdict.with_args(loss_type=loss_type)
+        with monitor('saving risk'):
+            for out in outputs:
+                outputdict.write(
+                    workflow.assets,
+                    out.output,
+                    output_type="bcr_distribution",
+                    hazard_output_id=out.hid)
 
 
+@calculators.add('event_based_bcr')
 class EventBasedBCRRiskCalculator(event_based.EventBasedRiskCalculator):
     """
     Event based BCR risk calculator. Computes BCR distributions for a
     given set of assets.
     """
-    core_calc_task = event_based_bcr
+    core = staticmethod(event_based_bcr)
 
     validators = event_based.EventBasedRiskCalculator.validators + [
         validation.ExposureHasRetrofittedCosts]
 
     output_builders = [writers.BCRMapBuilder]
 
-    def __init__(self, job):
-        super(EventBasedBCRRiskCalculator, self).__init__(job)
-        self.risk_models_retrofitted = None
+    bcr = True
 
-    def calculation_unit(self, loss_type, assets):
+    def get_workflow(self, vf_orig, vf_retro):
         """
+        :param vf_orig:
+            original vulnerability function
+        :param vf_orig:
+            retrofitted vulnerability functions
         :returns:
-          a list of instances of `..base.CalculationUnit` for the given
-          `assets` to be run in the celery task
+            an instance of
+            :class:`openquake.risklib.workflows.ProbabilisticEventBasedBCR`
         """
-
-        # assume all assets have the same taxonomy
-        taxonomy = assets[0].taxonomy
-        model_orig = self.risk_models[taxonomy][loss_type]
-        model_retro = self.risk_models_retrofitted[taxonomy][loss_type]
-
         time_span, tses = self.hazard_times()
-
-        return workflows.CalculationUnit(
-            loss_type,
-            workflows.ProbabilisticEventBasedBCR(
-                model_orig.vulnerability_function,
-                self.rnd.randint(0, models.MAX_SINT_32),
-                model_retro.vulnerability_function,
-                self.rnd.randint(0, models.MAX_SINT_32),
-                self.rc.asset_correlation,
-                time_span, tses, self.rc.loss_curve_resolution,
-                self.rc.interest_rate,
-                self.rc.asset_life_expectancy),
-            hazard_getters.BCRGetter(
-                hazard_getters.GroundMotionValuesGetter(
-                    self.rc.hazard_outputs(),
-                    assets,
-                    self.rc.best_maximum_distance,
-                    model_orig.imt),
-                hazard_getters.GroundMotionValuesGetter(
-                    self.rc.hazard_outputs(),
-                    assets,
-                    self.rc.best_maximum_distance,
-                    model_retro.imt)))
+        return workflows.ProbabilisticEventBasedBCR(
+            vf_orig, vf_retro,
+            time_span, tses, self.rc.loss_curve_resolution,
+            self.rc.interest_rate,
+            self.rc.asset_life_expectancy)
 
     def post_process(self):
         """
         No need to compute the aggregate loss curve in the BCR calculator.
         """
 
-    def task_completed_hook(self, _message):
+    def agg_result(self, acc, event_loss_tables):
         """
         No need to update event loss tables in the BCR calculator
         """
-
-    def pre_execute(self):
-        """
-        Store both the risk model for the original asset configuration
-        and the risk model for the retrofitted one.
-        """
-        super(EventBasedBCRRiskCalculator, self).pre_execute()
-        self.risk_models_retrofitted = self.get_risk_models(retrofitted=True)
+        return acc

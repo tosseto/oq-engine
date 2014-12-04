@@ -1,4 +1,4 @@
-# Copyright (c) 2010-2013, GEM Foundation.
+# Copyright (c) 2010-2014, GEM Foundation.
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -13,10 +13,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 
-"""This package contains functionality for querying and exporting calculation
-results"""
+"""
+This package contains functionality for querying and exporting calculation
+results
+"""
 
-
-from openquake.engine.export import risk
-
-__all__ = (risk.__name__,)
+# don't remove, we are registering the export functions here!
+from openquake.engine.export import core, hazard, risk

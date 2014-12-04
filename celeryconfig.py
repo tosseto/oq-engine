@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright (c) 2010-2013, GEM Foundation.
+# Copyright (c) 2010-2014, GEM Foundation.
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -25,7 +25,6 @@ eventually.
 
 import os
 import sys
-import imp
 
 # just in the case that are you using oq-engine from sources
 # with the rest of oq libraries installed into the system (or a
@@ -35,7 +34,7 @@ if os.environ.get("OQ_ENGINE_USE_SRCDIR"):
         0, os.path.join(os.path.dirname(__file__), "openquake"))
 
 from openquake.engine.utils import config, get_core_modules
-from openquake.engine.calculators import hazard, risk
+from openquake import engine
 
 config.abort_if_no_config_available()
 
@@ -48,6 +47,12 @@ BROKER_PORT = int(amqp.get("port"))
 BROKER_USER = amqp.get("user")
 BROKER_PASSWORD = amqp.get("password")
 BROKER_VHOST = amqp.get("vhost")
+# BROKER_POOL_LIMIT enables a connections pool so Celery can reuse
+# a single connection to RabbitMQ. Value 10 is the default from
+# Celery 2.5 where this feature is enabled by default.
+# Actually disabled because it's not stable in production.
+# See https://bugs.launchpad.net/oq-engine/+bug/1250402
+BROKER_POOL_LIMIT = None
 
 CELERY_RESULT_BACKEND = "amqp"
 
@@ -58,20 +63,14 @@ CELERY_RESULT_BACKEND = "amqp"
 # reserve 4 tasks at once. For long running calculations with lots of long,
 # heavy tasks, this greedy prefetching is not recommended and can result in
 # performance issues with respect to cluster utilization.)
+# CELERY_MAX_CACHED_RESULTS disable the cache on the results: this means
+# that map_reduce will not leak memory by keeping the intermediate results
 CELERY_ACKS_LATE = True
 CELERYD_PREFETCH_MULTIPLIER = 1
+CELERY_MAX_CACHED_RESULTS = 1
 
-HAZARD_MODULES = get_core_modules(hazard)
-
-RISK_MODULES = get_core_modules(risk)
-
-CELERY_IMPORTS = HAZARD_MODULES + RISK_MODULES
-
-try:
-    imp.find_module("tasks", [os.path.join(x, "tests/utils")
-                              for x in sys.path])
-    CELERY_IMPORTS.append("tests.utils.tasks")
-except ImportError:
-    pass
+CELERY_IMPORTS = get_core_modules(engine) + [
+    "openquake.engine.calculators.hazard.general",
+    "openquake.engine.tests.utils.tasks"]
 
 os.environ["DJANGO_SETTINGS_MODULE"] = "openquake.engine.settings"

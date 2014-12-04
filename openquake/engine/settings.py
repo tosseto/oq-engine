@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright (c) 2010-2013, GEM Foundation.
+# Copyright (c) 2010-2014, GEM Foundation.
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -36,7 +36,7 @@ def _db_cfg(db_name):
 
     :returns: Configuration dict, structured like so::
         {'ENGINE': 'django.db.backends.postgresql_psycopg2',
-         'NAME': 'openquake',
+         'NAME': 'openquake2',
          'USER': 'openquake',
          'PASSWORD': 'secret',
          'HOST': 'localhost',
@@ -52,15 +52,13 @@ def _db_cfg(db_name):
         USER=DB_SECTION.get('%s_user' % db_name, 'openquake'),
         PASSWORD=DB_SECTION.get('%s_password' % db_name, ''),
         HOST=DB_SECTION.get('host', ''),
-        PORT=DB_SECTION.get('port', ''),
+        PORT=DB_SECTION.get('port', '5432'),
     )
 
 
 _DB_NAMES = (
     'admin',
     'job_init',
-    'job_superv',
-    'reslt_writer',
 )
 
 DATABASES = dict((db, _db_cfg(db)) for db in _DB_NAMES)
@@ -73,7 +71,7 @@ DATABASES['default'] = {
     'USER': DB_SECTION.get('%s_user' % DEFAULT_USER, 'oq_admin'),
     'PASSWORD': DB_SECTION.get('%s_password' % DEFAULT_USER, 'openquake'),
     'HOST': '',
-    'PORT': '',
+    'PORT': '5432',
 }
 
 DATABASE_ROUTERS = ['openquake.engine.db.routers.OQRouter']
@@ -94,3 +92,8 @@ SECRET_KEY = 'change-me-in-production'
 
 USE_I18N = False
 USE_L10N = False
+
+try:
+    from local_settings import *
+except ImportError:
+    pass

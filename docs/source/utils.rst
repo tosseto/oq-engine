@@ -10,10 +10,6 @@ The :mod:`Utils` Sub-package
 Utility functions that are of interest to and shared by the entire
 OpenQuake python code base.
 
-:mod:`general`
---------------
-
-.. automodule:: openquake.engine.utils.general
 
 :mod:`version`
 --------------
@@ -24,11 +20,6 @@ OpenQuake python code base.
 -------------
 
 .. automodule:: openquake.engine.utils.config
-
-:mod:`stats`
-------------
-
-.. automodule:: openquake.engine.utils.stats
 
 :mod:`tasks`
 ------------

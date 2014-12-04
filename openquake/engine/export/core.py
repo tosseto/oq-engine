@@ -1,4 +1,4 @@
-# Copyright (c) 2010-2013, GEM Foundation.
+# Copyright (c) 2010-2014, GEM Foundation.
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -19,46 +19,31 @@ file formats."""
 
 
 import os
-
 from openquake.engine.db import models
+from openquake.engine.logs import LOG
+from openquake.baselib.general import CallableDict
 
+export_output = CallableDict()
+
+
+def export(output_id, target, export_type='xml,geojson,csv'):
+    """
+    Export the given calculation `output_id` from the database to the
+    specified `target` directory in the specified `export_type`.
+    """
+    output = models.Output.objects.get(id=output_id)
+    if isinstance(target, basestring):  # create target directory
+        makedirs(target)
+    for exptype in export_type.split(','):
+        key = (output.output_type, exptype)
+        if key in export_output:
+            return export_output(key, output, target)
+    LOG.warn(
+        'No "%(fmt)s" exporter is available for "%(output_type)s"'
+        ' outputs' % dict(fmt=export_type, output_type=output.output_type))
 
 #: Used to separate node labels in a logic tree path
 LT_PATH_JOIN_TOKEN = '_'
-
-
-def _export_fn_not_implemented(output, _target_dir):
-    """This gets called if an export is attempted on an unsupported output
-    type. See :data:`_EXPORT_FN_MAP`."""
-    raise NotImplementedError('Cannot export output of type: %s'
-                              % output.output_type)
-
-
-def makedirsdeco(fn):
-    """Decorator for export functions. Creates intermediate directories (if
-    necessary) to the target export directory.
-
-    This is equivalent to `mkdir -p` and :func:`os.makedirs`.
-    """
-
-    def wrapped(output, target):
-        """
-        If the the ``target`` is a directory path (string), call
-        :func:`os.makedirs` to create intermediate directories to
-        the ``target``.
-
-        Otherwise, the ``target`` could be a file-like object, in which case we
-        don't do anything.
-        """
-        if isinstance(target, basestring):
-            makedirs(target)
-        return fn(output, target)
-
-    # This fixes doc generation problems with decorators
-    wrapped.__doc__ = fn.__doc__
-    wrapped.__repr__ = fn.__repr__
-
-    return wrapped
 
 
 def makedirs(path):
@@ -75,14 +60,19 @@ def makedirs(path):
         os.makedirs(path)
 
 
-def get_outputs(job_id):
+def get_outputs(job_id, output_type=None):
     """Get all :class:`openquake.engine.db.models.Output` objects associated
-    with the specified job.
+    with the specified job and output_type.
 
     :param int job_id:
         ID of a :class:`openquake.engine.db.models.OqJob`.
+    :param str output_type:
+        the output type; if None, return all outputs
     :returns:
         :class:`django.db.models.query.QuerySet` of
         :class:`openquake.engine.db.models.Output` objects.
     """
-    return models.Output.objects.filter(oq_job=job_id)
+    queryset = models.Output.objects.filter(oq_job=job_id)
+    if output_type:
+        return queryset.filter(output_type=output_type)
+    return queryset
