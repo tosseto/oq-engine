@@ -80,20 +80,19 @@ fi
 pgport=$(cat /etc/postgresql/9.1/main/postgresql.conf | perl -wane ' if ($_ =~ /^\s*port\s*=/) { s/^\s*port\s*=\s*(\d+).*$/$1/; print $_; }')
 LOGFILE=/var/tmp/openquake-db-installation
 rm -f $LOGFILE
-su -c "/usr/bin/oq_create_db --yes --db-name=openquake --db-port=$pgport --schema-path=$IDIR/db/schema > $LOGFILE 2>&1" postgres
-for dbu in oq_admin oq_job_init oq_job_superv oq_reslt_writer; do
+su -c "/usr/bin/oq_create_db --yes --db-name=openquake2 --db-port=$pgport > $LOGFILE 2>&1" postgres
+for dbu in oq_admin oq_job_init; do
     su -c "psql -p $pgport -c \"ALTER ROLE $dbu WITH PASSWORD 'openquake'\" >> $LOGFILE 2>&1" postgres
 done
 chmod 644 $LOGFILE
 
-num_of_errors=$(grep -i error $LOGFILE | grep -v "is not empty" | grep -v error_msg_ | wc -l)
+num_of_errors=$(grep -i error $LOGFILE | grep -v "is not empty" | grep -v error_msg_ | grep -v ON_ERROR_STOP | wc -l)
 if [ $num_of_errors -gt 0 ]; then
     echo "Failed to initialise the openquake database"
     echo "Please file a bug here:"
     echo "    https://bugs.launchpad.net/openquake/+filebug"
     echo "and attach this file to it:"
     echo "    $LOGFILE"
-    su -c "psql -p $pgport c \"DROP DATABASE openquake\" >/dev/null 2>&1" postgres
     db_stop
     exit 1
 fi
@@ -109,8 +108,8 @@ if [ $oq_config_lines -eq $auto_oq_config_lines ]; then
     rm -f $PG_ROOT/pg_hba.conf.orig
     mv $PG_ROOT/pg_hba.conf $PG_ROOT/pg_hba.conf.orig
     cat $PG_ROOT/pg_hba.conf.orig | grep -v 'local..*oq_' > $PG_ROOT/pg_hba.conf
-    for dbu in oq_reslt_writer oq_job_superv oq_job_init oq_admin; do
-        sed -i "0,/\(^[  ]*[^#]\+\)/{s/\(^[        ]*[^#]\+\)/local   openquake   $dbu                   md5\n\1/}" $PG_ROOT/pg_hba.conf
+    for dbu in oq_job_init oq_admin; do
+        sed -i "0,/\(^[  ]*[^#]\+\)/{s/\(^[        ]*[^#]\+\)/local   openquake2   $dbu                   md5\n\1/}" $PG_ROOT/pg_hba.conf
     done
     /etc/init.d/postgresql reload 9.1
 else
@@ -122,7 +121,7 @@ else
     echo "Please ask the system administrator to grant access to the"
     echo "'openquake' database to the following users:"
     echo ""
-    echo "      oq_admin oq_job_init oq_job_superv oq_reslt_writer"
+    echo "      oq_admin oq_job_init"
     echo "============================================================"
     echo ""
 fi
