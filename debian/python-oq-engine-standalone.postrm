@@ -35,7 +35,7 @@ case "$1" in
     # This package has previously been removed and is now having
     # its configuration purged from the system.
     :
-    # for dir in  /etc/openquake /usr/share/pyshared/openquake/engine /usr/share/doc/${GEM_DEB_PACKAGE} /usr/share/pyshared/openquake.engine-*egg-info
+    # for dir in  /etc/openquake/engine /usr/share/pyshared/openquake/engine /usr/share/doc/${GEM_DEB_PACKAGE} /usr/share/pyshared/openquake.engine-*egg-info
     # do
     # rm -rf $dir
     # done

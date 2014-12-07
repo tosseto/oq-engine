@@ -23,7 +23,7 @@ set -e
 
 GEM_TB="	"
 GEM_DEB_PACKAGE="python-oq-engine-worker"
-SDIR="${GEM_FAKEROOT}/etc/openquake"
+SDIR="${GEM_FAKEROOT}/etc/openquake/engine"
 IDIR="${GEM_FAKEROOT}/usr/share/pyshared/openquake/engine"
 
 # GEM DEVEL BEGIN
@@ -67,7 +67,7 @@ chown -R root.openquake $SDIR
 # update host configuration
 db_get ${GEM_DEB_PACKAGE}/master-address || true
 master_address="$RET"
-sed -i "s/^host[ $GEM_TB]*=.*/host = $master_address/g" "${GEM_FAKEROOT}/etc/openquake/openquake.cfg"
+sed -i "s/^host[ $GEM_TB]*=.*/host = $master_address/g" "${GEM_FAKEROOT}/etc/openquake/engine/openquake.cfg"
 
 # if celeryd default file exists then extract user and group and create them if not already exists
 if [ -f "${GEM_FAKEROOT}/etc/default/celeryd" ]; then

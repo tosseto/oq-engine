@@ -100,7 +100,7 @@ PG_CONF="${PG_BASE}/postgresql.conf"
 REDIS_CONF="${GEM_FAKEROOT}/etc/redis/redis.conf"
 PG_HBA_CONF="${PG_BASE}/pg_hba.conf"
 
-OQ_BASE="${GEM_FAKEROOT}/etc/openquake"
+OQ_BASE="${GEM_FAKEROOT}/etc/openquake/engine"
 OQ_CONF="${OQ_BASE}/openquake.cfg"
 OQ_SHARE="${GEM_FAKEROOT}/usr/share/pyshared/openquake/engine"
 

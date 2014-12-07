@@ -20,8 +20,8 @@ case "$1" in
     # This package has been removed, but its configuration has not yet
     # been purged.
     :
-    if [ -f /etc/openquake/openquake.cfg ]; then
-        sed -i 's/^host =.*/host = localhost/g' /etc/openquake/openquake.cfg
+    if [ -f /etc/openquake/engine/openquake.cfg ]; then
+        sed -i 's/^host =.*/host = localhost/g' /etc/openquake/engine/openquake.cfg
     fi
     # for dir in /usr/share/doc/${GEM_DEB_PACKAGE}; do
     #         rm -rf $dir
@@ -38,7 +38,7 @@ case "$1" in
     # This package has previously been removed and is now having
     # its configuration purged from the system.
     :
-    # for dir in  /etc/openquake /usr/share/pyshared/openquake/engine /usr/share/doc/${GEM_DEB_PACKAGE} /usr/share/pyshared/openquake.engine-*egg-info
+    # for dir in  /etc/openquake/engine /usr/share/pyshared/openquake/engine /usr/share/doc/${GEM_DEB_PACKAGE} /usr/share/pyshared/openquake.engine-*egg-info
     # do
     # rm -rf $dir
     # done

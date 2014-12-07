@@ -1,4 +1,4 @@
-diff -r curr/rootfs.debconf99.step0/etc/openquake/openquake.cfg curr/rootfs/etc/openquake/openquake.cfg
+diff -r curr/rootfs.debconf99.step0/etc/openquake/engine/openquake.cfg curr/rootfs/etc/openquake/engine/openquake.cfg
 19c19
 < host = localhost
 ---
