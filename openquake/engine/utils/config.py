@@ -47,13 +47,13 @@ class _Config(object):
 
     In the absence of these environment variables the following hard-coded
     paths will be used in order:
-        - /etc/openquake/openquake.cfg
+        - /etc/openquake/engine/openquake.cfg
         - ./openquake.cfg
 
     Please note: settings in the site configuration file are overridden
     by settings with the same key names in the local configuration.
     """
-    GLOBAL_PATH = "/etc/openquake/openquake.cfg"
+    GLOBAL_PATH = "/etc/openquake/engine/openquake.cfg"
     LOCAL_PATH = os.path.join(OQDIR, "openquake.cfg")
     cfg = dict()
 

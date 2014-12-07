@@ -56,6 +56,7 @@ GEM_BUILD_SRC="${GEM_BUILD_ROOT}/${GEM_DEB_PACKAGE}"
 
 GEM_MAXLOOP=20
 
+GEM_NUMB_OF_WORKERS=1
 GEM_ALWAYS_YES=false
 
 if [ "$GEM_EPHEM_CMD" = "" ]; then
@@ -76,13 +77,19 @@ TB="	"
 sig_hand () {
     trap ERR
     echo "signal trapped"
-    if [ "$lxc_name" != "" ]; then
-        set +e
-        scp "${lxc_ip}:/var/tmp/openquake-db-installation" openquake-db-installation
-        scp "${lxc_ip}:/tmp/celeryd.log" celeryd.log
-        scp "${lxc_ip}:ssh.log" ssh.history
-        echo "Destroying [$lxc_name] lxc"
-        upper="$(mount | grep "${lxc_name}.*upperdir" | sed 's@.*upperdir=@@g;s@,.*@@g')"
+
+    set +e
+    for lname in "$lxc_name" "$lxc_master_name" "${lxc_worker_name[@]}"; do
+        if [ "$lname" == "" ]; then
+            continue
+        fi
+        # FIXME
+#        scp "${lxc_ip}:/var/tmp/openquake-db-installation" openquake-db-installation
+#        scp "${lxc_ip}:/tmp/celeryd.log" celeryd.log
+#        scp "${lxc_ip}:ssh.log" ssh.history
+
+        echo "Destroying [$lname] lxc"
+        upper="$(mount | grep "${lname}.*upperdir" | sed 's@.*upperdir=@@g;s@,.*@@g')"
         if [ -f "${upper}.dsk" ]; then
             loop_dev="$(sudo losetup -a | grep "(${upper}.dsk)$" | cut -d ':' -f1)"
         fi
@@ -107,7 +114,6 @@ sig_hand () {
     fi
     exit 1
 }
-
 
 #
 #  dep2var <dep> - converts in a proper way the name of a dependency to a variable name
@@ -255,7 +261,7 @@ _wait_ssh () {
 _devtest_innervm_run () {
     local i old_ifs pkgs_list dep branch_id="$1" lxc_ip="$2"
 
-    trap 'local LASTERR="$?" ; trap ERR ; (exit $LASTERR) ; return' ERR
+    trap 'local LASTERR="$?" ; sleep 36000 ; trap ERR ; (exit $LASTERR) ; return' ERR
 
     ssh $lxc_ip "rm -f ssh.log"
 
@@ -315,8 +321,6 @@ _devtest_innervm_run () {
     ssh $lxc_ip "set -e ; sudo su postgres -c \"cd oq-engine ; openquake/engine/bin/oq_create_db --yes --db-name=openquake2\""
     ssh $lxc_ip "set -e ; export PYTHONPATH=\"\$PWD/oq-engine:\$PWD/oq-hazardlib:\$PWD/oq-risklib\" ; cd oq-engine ; bin/oq-engine --upgrade-db --yes"
 
-    ssh $lxc_ip "export PYTHONPATH=\"\$PWD/oq-engine:\$PWD/oq-nrmllib:\$PWD/oq-hazardlib:\$PWD/oq-risklib\" ; cd oq-engine ; python -c \"from openquake.engine.tools.restore_hazards import hazard_restore_local; hazard_restore_local('qa_tests/risk/fixtures.tar')\""
-
     # run celeryd daemon
     ssh $lxc_ip "export PYTHONPATH=\"\$PWD/oq-engine:\$PWD/oq-hazardlib:\$PWD/oq-risklib\" ; cd oq-engine ; celeryd >/tmp/celeryd.log 2>&1 3>&1 &"
 
@@ -345,7 +349,7 @@ celeryd_wait $GEM_MAXLOOP"
 
         # run tests (in this case we omit 'set -e' to be able to read all tests outputs)
         ssh $lxc_ip "export PYTHONPATH=\"\$PWD/oq-engine:\$PWD/oq-hazardlib:\$PWD/oq-risklib\" ;
-                 cd oq-engine
+                 cd oq-engine ;
                  nosetests -v --with-xunit --xunit-file=xunit-server.xml --with-coverage --cover-package=openquake.server --with-doctest openquake/server/tests/
                  nosetests -v --with-xunit --xunit-file=xunit-engine.xml --with-coverage --cover-package=openquake.engine --with-doctest openquake/engine/tests/
 
@@ -386,7 +390,7 @@ celeryd_wait $GEM_MAXLOOP"
 #                     - adds repositories to apt sources on lxc
 #                     - performs package tests (install, remove, reinstall ..)
 #                     - set up postgres
-#                     - upgrade db
+#                     - creates database schema
 #                     - runs celeryd
 #                     - executes demos
 #
@@ -395,7 +399,7 @@ celeryd_wait $GEM_MAXLOOP"
 _pkgtest_innervm_run () {
     local lxc_ip="$1" old_ifs
 
-    trap 'local LASTERR="$?" ; trap ERR ; (exit $LASTERR) ; return' ERR
+    trap 'local LASTERR="$?" ; sleep 36000 ; trap ERR ; (exit $LASTERR) ; return' ERR
 
     ssh $lxc_ip "rm -f ssh.log"
     ssh $lxc_ip "sudo apt-get update"
@@ -406,7 +410,7 @@ _pkgtest_innervm_run () {
 
     # create a remote "local repo" where place $GEM_DEB_PACKAGE package
     ssh $lxc_ip mkdir -p "repo/${GEM_DEB_PACKAGE}"
-    scp build-deb/${GEM_DEB_PACKAGE}_*.deb build-deb/${GEM_DEB_PACKAGE}_*.changes \
+    scp build-deb/${GEM_DEB_PACKAGE}-*_*.deb build-deb/${GEM_DEB_PACKAGE}_*.changes \
         build-deb/${GEM_DEB_PACKAGE}_*.dsc build-deb/${GEM_DEB_PACKAGE}_*.tar.gz \
         build-deb/Packages* build-deb/Sources*  build-deb/Release* $lxc_ip:repo/${GEM_DEB_PACKAGE}
     ssh $lxc_ip "sudo apt-add-repository \"deb file:/home/ubuntu/repo/${GEM_DEB_PACKAGE} ./\""
@@ -446,42 +450,56 @@ _pkgtest_innervm_run () {
     scp -r ${GEM_DEB_REPO}/custom_pkgs $lxc_ip:repo/custom_pkgs
     ssh $lxc_ip "sudo apt-add-repository \"deb file:/home/ubuntu/repo/custom_pkgs ./\""
 
+    #    scp "${lxc_ip}:oq-engine/nosetests.xml" .
+
     ssh $lxc_ip "sudo apt-get update"
     ssh $lxc_ip "sudo apt-get upgrade -y"
+
 
     # packaging related tests (install, remove, purge, install, reinstall)
     echo "PKGTEST: INSTALL standalone"
     ssh $lxc_ip "sudo apt-get install -y ${GEM_DEB_PACKAGE}-standalone"
 
-    # configure the machine to run tests
-    ssh $lxc_ip "sudo sed -i 's/#standard_conforming_strings = on/standard_conforming_strings = off/g' /etc/postgresql/9.1/main/postgresql.conf"
+    echo "PKGTEST: REMOVE standalone"
+    sleep 20
+    ssh $lxc_ip "sudo service celeryd stop"
+    sleep 2
+    ssh $lxc_ip "sudo apt-get remove -y ${GEM_DEB_PACKAGE}-standalone"
 
-    ssh $lxc_ip "sudo service postgresql restart"
-    # XXX: should the --upgrade-db command go in the postint script?
-    ssh $lxc_ip "set -e; oq-engine --upgrade-db --yes"
+    echo "PKGTEST: INSTALL AGAIN standalone"
+    sleep 20
+    ssh $lxc_ip "sudo service celeryd stop"
+    sleep 2
+    ssh $lxc_ip "sudo apt-get install -y ${GEM_DEB_PACKAGE}-standalone"
 
     echo "PKGTEST: REINSTALL standalone"
-    sleep 5
+    sleep 20
     ssh $lxc_ip "sudo service celeryd stop"
-    sleep 5
+    sleep 2
     ssh $lxc_ip "sudo apt-get install --reinstall -y ${GEM_DEB_PACKAGE}-standalone"
 
     # configure the machine to run tests
-#dis    ssh $lxc_ip "echo \"local   all             \$USER          trust\" | sudo tee -a /etc/postgresql/9.1/main/pg_hba.conf"
-#nella config    ssh $lxc_ip "sudo sed -i 's/#standard_conforming_strings = on/standard_conforming_strings = off/g' /etc/postgresql/9.1/main/postgresql.conf"
+    #dis    ssh $lxc_ip "echo \"local   all             \$USER          trust\" | sudo tee -a /etc/postgresql/9.1/main/pg_hba.conf"
+    ssh $lxc_ip "sudo sed -i 's/#standard_conforming_strings = on/standard_conforming_strings = off/g' /etc/postgresql/9.1/main/postgresql.conf"
 
-#dis    ssh $lxc_ip "sudo service postgresql restart"
-#dis     ssh $lxc_ip "sudo -u postgres  createuser -d -e -i -l -s -w \$USER"
-    ssh $lxc_ip "sudo -u postgres oq_create_db --yes --db-user=postgres --db-name=openquake --no-tab-spaces --schema-path=/usr/share/pyshared/openquake/engine/db/schema"
+    ssh $lxc_ip "sudo service postgresql restart"
+
+    #dis     ssh $lxc_ip "sudo -u postgres  createuser -d -e -i -l -s -w \$USER"
+    #dis     ssh $lxc_ip "sudo -u postgres oq_create_db --yes --db-user=postgres --db-name=openquake --no-tab-spaces --schema-path=/usr/share/pyshared/openquake/engine/db/schema"
+
+    # XXX: should the --upgrade-db command go in the postint script?
+    ssh $lxc_ip "set -e; oq-engine --upgrade-db --yes"
+
+    # run celeryd daemon
+    ssh $lxc_ip "cd /usr/openquake/engine ; celeryd >/tmp/celeryd.log 2>&1 3>&1 &"
 
     # copy demos file to $HOME
     ssh $lxc_ip "cp -a /usr/share/doc/${GEM_DEB_PACKAGE}-common/examples/demos ."
-
     if [ -z "$GEM_PKGTEST_SKIP_DEMOS" ]; then
         # run all of the hazard and risk demos
-        ssh $lxc_ip "set -e ; cd demos
+        ssh $lxc_ip "set -e; export GEM_PKGTEST_ONE_DEMO=$GEM_PKGTEST_ONE_DEMO ; cd demos
         for ini in \$(find ./hazard -name job.ini | sort); do
-            echo \"Running \$ini\"
+            echo \"Running demo \$ini\"
             for loop in \$(seq 1 $GEM_MAXLOOP); do
                 set +e
                 oq-engine --run-hazard  \$ini --exports xml -l info
@@ -509,6 +527,7 @@ _pkgtest_innervm_run () {
             cd -
         done"
     fi
+
     ssh $lxc_ip "oq-engine --make-html-report today"
     scp "${lxc_ip}:jobs-*.html" .
     trap ERR
@@ -523,7 +542,7 @@ _pkgclustest_innervm_run () {
     shift 1
     lxc_worker_ip=("$@")
 
-    trap 'local LASTERR="$?" ; trap ERR ; (exit $LASTERR) ; return' ERR
+    trap 'local LASTERR="$?" ; sleep 36000 ; trap ERR ; (exit $LASTERR) ; return' ERR
     for ip_cur in $lxc_master_ip ${lxc_worker_ip[@]}; do
         ssh $ip_cur "sudo apt-get update"
         ssh $ip_cur "sudo apt-get -y upgrade"
@@ -986,7 +1005,7 @@ EOF
             fi
         fi
 
-        cp build-deb/${GEM_DEB_PACKAGE}_*.deb build-deb/${GEM_DEB_PACKAGE}_*.changes \
+        cp build-deb/${GEM_DEB_PACKAGE}-*_*.deb build-deb/${GEM_DEB_PACKAGE}_*.changes \
             build-deb/${GEM_DEB_PACKAGE}_*.dsc build-deb/${GEM_DEB_PACKAGE}_*.tar.gz \
             build-deb/Packages* build-deb/Sources* build-deb/Release* "${repo_tmpdir}"
         if [ "${GEM_DEB_REPO}/${GEM_DEB_SERIE}/${GEM_DEB_PACKAGE}" ]; then
@@ -1002,6 +1021,9 @@ EOF
 #
 #  MAIN
 #
+
+# echo "xx$(repo_id_get)yy"
+# exit 123
 BUILD_SOURCES_COPY=0
 BUILD_BINARIES=0
 BUILD_REPOSITORY=0
