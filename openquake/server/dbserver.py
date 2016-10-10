@@ -34,7 +34,8 @@ from openquake.server.db import actions
 from openquake.server import dbapi
 from openquake.server.settings import DATABASE
 
-executor = ProcessPoolExecutor(1)  # there is a single db process
+db_executor = ProcessPoolExecutor(1)  # there is a single db process
+task_executor = ProcessPoolExecutor()  # executor for the tasks
 
 
 class DbServer(object):
@@ -67,15 +68,19 @@ class DbServer(object):
                     conn.send((None, None))
                     conn.close()
                     break
-                func = getattr(actions, cmd)
-                fut = executor.submit(safely_call, func, (self.db, ) + args)
+                if callable(cmd):  # is a task
+                    fut = task_executor.submit(safely_call, cmd, args)
+                else:  # is a db command
+                    func = getattr(actions, cmd)
+                    fut = db_executor.submit(
+                        safely_call, func, (self.db, ) + args)
 
                 def sendback(fut, conn=conn):
-                    res, etype, _mon = fut.result()
+                    res, etype, mon = fut.result()
                     if etype:
                         logging.error(res)
                     # send back the result and the exception class
-                    conn.send((res, etype))
+                    conn.send((res, etype, mon))
                     conn.close()
                 fut.add_done_callback(sendback)
         finally:

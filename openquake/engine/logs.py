@@ -53,7 +53,7 @@ def dbcmd(action, *args):
         raise RuntimeError('Cannot connect on %s:%s' % config.DBS_ADDRESS)
     try:
         client.send((action,) + args)
-        res, etype = client.recv()
+        res, etype, _mon = client.recv()
     finally:
         client.close()
     if etype:
