@@ -42,14 +42,14 @@ if USE_CELERY:
 
     def set_concurrent_tasks_default():
         """
-        Set the default for concurrent_tasks to twice the number of workers.
+        Set the default for concurrent_tasks.
         Returns the number of live celery nodes (i.e. the number of machines).
         """
         stats = celery.task.control.inspect(timeout=1).stats()
         if not stats:
             sys.exit("No live compute nodes, aborting calculation")
         num_cores = sum(stats[k]['pool']['max-concurrency'] for k in stats)
-        OqParam.concurrent_tasks.default = num_cores * 3
+        OqParam.concurrent_tasks.default = num_cores * 5
         logs.LOG.info(
             'Using %s, %d cores', ', '.join(sorted(stats)), num_cores)
 
@@ -81,7 +81,7 @@ def expose_outputs(dstore):
     """
     oq = dstore['oqparam']
     exportable = set(ekey[0] for ekey in export.export)
-    # small hack: remove the sescollection outputs from scenario
+    # small hack: remove the ruptures from scenario
     # calculators, as requested by Vitor
     calcmode = oq.calculation_mode
     dskeys = set(dstore) & exportable  # exportable datastore keys
@@ -95,8 +95,8 @@ def expose_outputs(dstore):
         rlzs = []
     if 'realizations' in dskeys and len(rlzs) <= 1:
         dskeys.remove('realizations')  # do not export a single realization
-    if 'sescollection' in dskeys and 'scenario' in calcmode:
-        exportable.remove('sescollection')  # do not export
+    if 'ruptures' in dskeys and 'scenario' in calcmode:
+        exportable.remove('ruptures')  # do not export
     logs.dbcmd('create_outputs', dstore.calc_id, sorted(dskeys))
 
 
@@ -177,13 +177,13 @@ def run_calc(job_id, oqparam, log_level, log_file, exports,
         try:
             logs.dbcmd('set_status', job_id, 'executing')
             _do_run_calc(calc, exports, hazard_calculation_id)
-            logs.dbcmd('finish', job_id, 'complete')
             expose_outputs(calc.datastore)
             records = views.performance_view(calc.datastore)
             logs.dbcmd('save_performance', job_id, records)
             calc.datastore.close()
             logs.LOG.info('Calculation %d finished correctly in %d seconds',
                           job_id, calc.monitor.duration)
+            logs.dbcmd('finish', job_id, 'complete')
         except:
             tb = traceback.format_exc()
             try:

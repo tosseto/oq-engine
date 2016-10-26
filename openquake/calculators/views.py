@@ -235,7 +235,7 @@ def view_csm_info(token, dstore):
 def view_ruptures_per_trt(token, dstore):
     tbl = []
     header = ('source_model grp_id trt num_sources '
-              'eff_ruptures weight'.split())
+              'eff_ruptures tot_ruptures'.split())
     num_trts = 0
     tot_sources = 0
     eff_ruptures = 0
@@ -262,7 +262,8 @@ def view_ruptures_per_trt(token, dstore):
     rows = [('#TRT models', num_trts),
             ('#sources', tot_sources),
             ('#eff_ruptures', eff_ruptures),
-            ('#tot_ruptures', tot_ruptures)]
+            ('#tot_ruptures', tot_ruptures),
+            ('#tot_weight', csm_info.tot_weight), ]
     if len(tbl) > 1:
         summary = '\n\n' + rst_table(rows)
     else:
@@ -523,12 +524,12 @@ def get_max_gmf_size(dstore):
     rlzs_by_grp_id = dstore['csm_info'].get_rlzs_assoc().get_rlzs_by_grp_id()
     n_ruptures = collections.Counter()
     size = collections.Counter()  # by grp_id
-    for serial in dstore['sescollection']:
-        ebr = dstore['sescollection/' + serial]
+    for serial in dstore['ruptures']:
+        ebr = dstore['ruptures/' + serial]
         grp_id = ebr.grp_id
         n_ruptures[grp_id] += 1
         # there are 4 bytes per float
-        size[grp_id] += (len(ebr.indices) * ebr.multiplicity *
+        size[grp_id] += (len(ebr.sids) * ebr.multiplicity *
                          len(rlzs_by_grp_id[grp_id]) * n_imts) * 4
     [(grp_id, maxsize)] = size.most_common(1)
     return dict(n_imts=n_imts, size=maxsize, n_ruptures=n_ruptures[grp_id],
@@ -549,7 +550,7 @@ def view_biggest_ebr_gmf(token, dstore):
 
 @view.add('ruptures_events')
 def view_ruptures_events(token, dstore):
-    num_ruptures = len(dstore['sescollection'])
+    num_ruptures = len(dstore['ruptures'])
     num_events = len(dstore['events'])
     mult = round(num_events / num_ruptures, 3)
     lst = [('Total number of ruptures', num_ruptures),
@@ -682,3 +683,16 @@ def view_task_durations(token, dstore):
     task = token.split(':')[1]  # called as task_duration:task_name
     array = dstore['task_info/' + task]['duration']
     return '\n'.join(map(str, array))
+
+
+@view.add('task_slowest')
+def view_task_slowest(token, dstore):
+    """
+    Display info about the slowest classical task.
+    """
+    i = dstore['task_info/classical']['duration'].argmax()
+    taskno, weight, duration = dstore['task_info/classical'][i]
+    sources = dstore['task_sources'][taskno - 1].split()
+    srcs = set(src.split(':', 1)[0] for src in sources)
+    return 'taskno=%d, weight=%d, duration=%d s, sources="%s"' % (
+        taskno, weight, duration, ' '.join(sorted(srcs)))
