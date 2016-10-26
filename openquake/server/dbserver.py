@@ -23,6 +23,7 @@ import sqlite3
 import os.path
 import logging
 import subprocess
+from multiprocessing import Process
 from multiprocessing.connection import Listener
 from concurrent.futures import ProcessPoolExecutor
 
@@ -35,7 +36,15 @@ from openquake.server import dbapi
 from openquake.server.settings import DATABASE
 
 db_executor = ProcessPoolExecutor(1)  # there is a single db process
-task_executor = ProcessPoolExecutor()  # executor for the tasks
+
+
+class ProcessFuture(Process):
+    def __init__(self, func, *args):
+        super(ProcessFuture, self).__init__(None, func, args)
+        self.start()
+
+    def add_done_callback(self, sendback):
+        """Do nothing: the process should not return anything"""
 
 
 class DbServer(object):
@@ -68,8 +77,8 @@ class DbServer(object):
                     conn.send((None, None))
                     conn.close()
                     break
-                if callable(cmd):  # is a task
-                    fut = task_executor.submit(safely_call, cmd, args)
+                if callable(cmd):  # is a job
+                    fut = ProcessFuture(safely_call, cmd, args)
                 else:  # is a db command
                     func = getattr(actions, cmd)
                     fut = db_executor.submit(
