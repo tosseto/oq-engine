@@ -33,7 +33,7 @@ from openquake.baselib.python3compat import configparser, encode
 from openquake.baselib import hdf5
 from openquake.hazardlib import geo, site, imt
 from openquake.hazardlib.calc.hazard_curve import zero_curves
-from openquake.risklib import riskmodels, riskinput, valid
+from openquake.risklib import riskmodels, valid, riskinput
 from openquake.commonlib import datastore
 from openquake.commonlib.oqvalidation import OqParam
 from openquake.commonlib.node import Node, context
@@ -318,7 +318,9 @@ def get_rupture(oqparam):
     [rup_node] = nrml.read(rup_model)
     conv = sourceconverter.RuptureConverter(
         oqparam.rupture_mesh_spacing, oqparam.complex_fault_mesh_spacing)
-    return conv.convert_node(rup_node)
+    rup = conv.convert_node(rup_node)
+    rup.tectonic_region_type = '*'  # there is not TRT for scenario ruptures
+    return rup
 
 
 def get_source_model_lt(oqparam):
@@ -536,58 +538,20 @@ def get_imts(oqparam):
     return list(map(imt.from_string, sorted(oqparam.imtls)))
 
 
-def get_risk_model(oqparam, rmdict):
+def get_risk_model(oqparam):
     """
     Return a :class:`openquake.risklib.riskinput.CompositeRiskModel` instance
 
    :param oqparam:
         an :class:`openquake.commonlib.oqvalidation.OqParam` instance
-   :param rmdict:
-        a dictionary (imt, taxonomy) -> loss_type -> risk_function
     """
-    riskmod = {}  # taxonomy -> riskmodel
-    crm = riskinput.CompositeRiskModel(riskmod)
-    if getattr(oqparam, 'limit_states', []):
-        # classical_damage/scenario_damage calculator
-        if oqparam.calculation_mode in ('classical', 'scenario'):
-            # case when the risk files are in the job_hazard.ini file
-            oqparam.calculation_mode += '_damage'
-        crm.damage_states = ['no_damage'] + oqparam.limit_states
-        delattr(oqparam, 'limit_states')
-        for taxonomy, ffs_by_lt in rmdict.items():
-            riskmod[taxonomy] = riskmodels.get_riskmodel(
-                taxonomy, oqparam, fragility_functions=ffs_by_lt)
-    elif oqparam.calculation_mode.endswith('_bcr'):
-        # classical_bcr calculator
+    rmdict = get_risk_models(oqparam)
+    oqparam.set_risk_imtls(rmdict)
+    if oqparam.calculation_mode.endswith('_bcr'):
         retro = get_risk_models(oqparam, 'vulnerability_retrofitted')
-        for (taxonomy, vf_orig), (taxonomy_, vf_retro) in \
-                zip(rmdict.items(), retro.items()):
-            assert taxonomy == taxonomy_  # same imt and taxonomy
-            riskmod[taxonomy] = riskmodels.get_riskmodel(
-                taxonomy, oqparam,
-                vulnerability_functions_orig=vf_orig,
-                vulnerability_functions_retro=vf_retro)
     else:
-        # classical, event based and scenario calculators
-        for taxonomy, vfs in rmdict.items():
-            for vf in vfs.values():
-                # set the seed; this is important for the case of
-                # VulnerabilityFunctionWithPMF
-                vf.seed = oqparam.random_seed
-            riskmod[taxonomy] = riskmodels.get_riskmodel(
-                taxonomy, oqparam, vulnerability_functions=vfs)
-
-    crm.make_curve_builders(oqparam)
-    taxonomies = set()
-    for taxonomy, riskmodel in riskmod.items():
-        taxonomies.add(taxonomy)
-        riskmodel.compositemodel = crm
-        # save the number of nonzero coefficients of variation
-        for vf in riskmodel.risk_functions.values():
-            if hasattr(vf, 'covs') and vf.covs.any():
-                crm.covs += 1
-    crm.taxonomies = sorted(taxonomies)
-    return crm
+        retro = {}
+    return riskinput.CompositeRiskModel(oqparam, rmdict, retro)
 
 # ########################### exposure ############################ #
 
@@ -994,7 +958,7 @@ def get_gmfs_from_txt(oqparam, fname):
                     raise InvalidFile(
                         'The column #%d in %s is expected to contain positive '
                         'floats, got %s instead' % (i + 3, fname, row[i + 2]))
-                gmf_by_imt[imts[i]][lineno - 2] = r_sites.expand(array, 0)
+                gmf_by_imt[imts[i]][lineno - 2][r_sites.sids] = array
             etags.append(row[0])
     if lineno < num_gmfs + 1:
         raise InvalidFile('%s contains %d rows, expected %d' % (
