@@ -2,8 +2,11 @@ sudo: false
 
 language: python
 
+os:
+  - osx
+
 python:
- - "3.5"
+ - "2.7"
 
 addons:
   apt:
@@ -11,7 +14,7 @@ addons:
     - git
 
 install:
-  - pip install -r requirements-py35-linux64.txt
+  - pip install -r requirements-py27-macos.txt
   - if [ "$(git ls-remote --heads https://github.com/gem/oq-hazardlib.git ${TRAVIS_BRANCH})" != "" ]; then BRANCH=$TRAVIS_BRANCH; else BRANCH='master'; fi; git clone -b ${BRANCH} --depth=1 https://github.com/gem/oq-hazardlib.git && echo "Running on oq-hazardlib/${BRANCH}"
   - pip install -e oq-hazardlib/
   - pip install -e .
