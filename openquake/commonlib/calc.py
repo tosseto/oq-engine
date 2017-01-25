@@ -61,15 +61,17 @@ def combine_pmaps(rlzs_assoc, pmaps):
     :param pmaps: dictionary src_group_id -> probability map (same sids)
     :returns: aggregate probability map of shape (N, L, R)
     """
-    N, L, _ = get_shape(pmaps.values())
+    vals = list(pmaps.values())
+    N, L, _ = get_shape(vals)
     R = len(rlzs_assoc.realizations)
-    sids = sorted(pmaps[0])
+    sids = sorted(vals[0])
     agg = numpy.zeros((N, L, R), F64)
     for grp_id in pmaps:
         for i, gsim in enumerate(rlzs_assoc.gsims_by_grp_id[grp_id]):
             arr = pmaps[grp_id].extract(i).array[:, :, 0]
             for rlz in rlzs_assoc.rlzs_assoc[grp_id, gsim]:
-                agg[:, :, i] = 1. - (1. - agg[:, :, i]) * (1. - arr)
+                r = rlz.ordinal
+                agg[:, :, r] = 1. - (1. - agg[:, :, r]) * (1. - arr)
     return ProbabilityMap.from_array(agg, sids)
 
 # ######################### hazard maps ################################### #
