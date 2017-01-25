@@ -23,14 +23,13 @@ import numpy
 
 from openquake.baselib import hdf5
 from openquake.baselib.python3compat import encode, decode
-from openquake.baselib.general import (
-    get_array, group_array, AccumDict)
+from openquake.baselib.general import get_array, group_array
 from openquake.hazardlib.geo.mesh import RectangularMesh, build_array
 from openquake.hazardlib.gsim.base import ContextMaker
 from openquake.hazardlib.imt import from_string
 from openquake.hazardlib import geo, tom
 from openquake.hazardlib.geo.point import Point
-from openquake.hazardlib.probability_map import ProbabilityMap
+from openquake.hazardlib.probability_map import ProbabilityMap, get_shape
 from openquake.commonlib import readinput, oqvalidation, util
 from openquake.hazardlib import valid
 
@@ -56,23 +55,23 @@ stored_event_dt = numpy.dtype([
 # ############## utilities for the classical calculator ############### #
 
 
-# used in classical and event_based calculators
-def combine_pmaps(rlzs_assoc, results):
+# used in classical calculators
+def combine_pmaps(rlzs_assoc, pmaps):
     """
     :param rlzs_assoc: a :class:`openquake.commonlib.source.RlzsAssoc` instance
-    :param results: dictionary src_group_id -> probability map
+    :param pmaps: dictionary src_group_id -> probability map (same sids)
     :returns: aggregate probability map of shape (N, L, R)
     """
-    acc = AccumDict()
-    for grp_id in results:
+    N, L, _ = get_shape(pmaps.values())
+    R = len(rlzs_assoc.realizations)
+    sids = sorted(pmaps[0])
+    agg = numpy.zeros((N, L, R), F64)
+    for grp_id in pmaps:
         for i, gsim in enumerate(rlzs_assoc.gsims_by_grp_id[grp_id]):
-            pmap = results[grp_id].extract(i)
+            arr = pmaps[grp_id].extract(i).array
             for rlz in rlzs_assoc.rlzs_assoc[grp_id, gsim]:
-                if rlz in acc:
-                    acc[rlz] |= pmap
-                else:
-                    acc[rlz] = copy.copy(pmap)
-    return acc
+                agg[i] = 1. - (1. - agg[i]) * (1. - arr)
+    return ProbabilityMap.from_array(agg, sids)
 
 # ######################### hazard maps ################################### #
 
