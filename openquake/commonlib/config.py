@@ -20,7 +20,6 @@
 """
 Various utility functions concerned with configuration.
 """
-
 from openquake.baselib.python3compat import configparser, encode
 import os
 import sys

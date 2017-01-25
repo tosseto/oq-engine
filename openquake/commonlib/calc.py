@@ -61,7 +61,7 @@ def combine_pmaps(rlzs_assoc, results):
     """
     :param rlzs_assoc: a :class:`openquake.commonlib.source.RlzsAssoc` instance
     :param results: dictionary src_group_id -> probability map
-    :returns: a dictionary rlz -> aggregate probability map
+    :returns: aggregate probability map of shape (N, L, R)
     """
     acc = AccumDict()
     for grp_id in results:
