@@ -18,7 +18,6 @@
 
 from __future__ import division
 import logging
-import copy
 import numpy
 
 from openquake.baselib import hdf5
@@ -68,9 +67,9 @@ def combine_pmaps(rlzs_assoc, pmaps):
     agg = numpy.zeros((N, L, R), F64)
     for grp_id in pmaps:
         for i, gsim in enumerate(rlzs_assoc.gsims_by_grp_id[grp_id]):
-            arr = pmaps[grp_id].extract(i).array
+            arr = pmaps[grp_id].extract(i).array[:, :, 0]
             for rlz in rlzs_assoc.rlzs_assoc[grp_id, gsim]:
-                agg[i] = 1. - (1. - agg[i]) * (1. - arr)
+                agg[:, :, i] = 1. - (1. - agg[:, :, i]) * (1. - arr)
     return ProbabilityMap.from_array(agg, sids)
 
 # ######################### hazard maps ################################### #
