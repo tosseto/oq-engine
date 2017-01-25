@@ -26,7 +26,8 @@ import collections
 import numpy
 
 from openquake.baselib.general import AccumDict, split_in_blocks
-from openquake.hazardlib.probability_map import ProbabilityMap, PmapStats
+from openquake.hazardlib.probability_map import ProbabilityMap
+from openquake.hazardlib.stats import MQStats
 from openquake.hazardlib.calc.filters import \
     filter_sites_by_distance_to_rupture
 from openquake.risklib.riskinput import GmfGetter, str2rsi, rsi2str
@@ -491,6 +492,7 @@ class EventBasedCalculator(ClassicalCalculator):
             return
         elif oq.hazard_curves_from_gmfs:
             rlzs = self.rlzs_assoc.realizations
+            A, L, R = len(self.sitecol), len(oq.imtls.array), len(rlzs)
             # save individual curves
             if self.oqparam.individual_curves:
                 for i in sorted(result):
@@ -504,12 +506,17 @@ class EventBasedCalculator(ClassicalCalculator):
             # involves a "small" number of sites (<= 65,536)
             weights = (None if self.oqparam.number_of_logic_tree_samples
                        else [rlz.weight for rlz in rlzs])
-            pstats = PmapStats(self.oqparam.quantile_hazard_curves, weights)
-            for kind, stat in pstats.compute(
-                    self.sitecol.sids, list(result.values())):
+            pstats = MQStats(self.oqparam.quantile_hazard_curves, weights)
+            array = numpy.zeros((A, L, R))
+            for r in sorted(result):
+                pmap = result[r]
+                for sid in pmap:
+                    array[sid, :, r] = pmap[sid].array[:, 0]
+            stats = ProbabilityMap.from_array(pstats(array), self.sitecol.sids)
+            for i, kind in enumerate(pstats.kinds):
                 if kind == 'mean' and not self.oqparam.mean_hazard_curves:
                     continue
-                self.datastore['hcurves/' + kind] = stat
+                self.datastore['hcurves/' + kind] = stats.extract(i)
 
         if ('gmf_data' in self.datastore and 'nbytes' not
                 in self.datastore['gmf_data'].attrs):

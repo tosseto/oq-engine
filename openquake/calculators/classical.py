@@ -31,7 +31,7 @@ from openquake.hazardlib.geo.utils import get_longitudinal_extent
 from openquake.hazardlib.geo.geodetic import npoints_between
 from openquake.hazardlib.calc.hazard_curve import (
     pmap_from_grp, ProbabilityMap)
-from openquake.hazardlib.probability_map import PmapStats
+from openquake.hazardlib.stats import MQStats
 from openquake.commonlib import datastore, source, calc
 from openquake.calculators import base
 
@@ -404,11 +404,11 @@ class PSHACalculator(base.HazardCalculator):
                 self.datastore.set_nbytes('poes')
 
 
-def build_hcurves_and_stats(pmap_by_grp, sids, pstats, rlzs_assoc, monitor):
+def build_hcurves_and_stats(pmap_by_grp, sids, statfunc, rlzs_assoc, monitor):
     """
     :param pmap_by_grp: dictionary of probability maps by source group ID
     :param sids: array of site IDs
-    :param pstats: instance of PmapStats
+    :param statfunc: function used to compute the statistics
     :param rlzs_assoc: instance of RlzsAssoc
     :param monitor: instance of Monitor
     :returns: a dictionary kind -> ProbabilityMap
@@ -420,13 +420,15 @@ def build_hcurves_and_stats(pmap_by_grp, sids, pstats, rlzs_assoc, monitor):
         return {}
     rlzs = rlzs_assoc.realizations
     with monitor('combine pmaps'):
-        pmap = calc.combine_pmaps(rlzs_assoc, pmap_by_grp)
+        array = calc.combine_pmaps(rlzs_assoc, pmap_by_grp)
     with monitor('compute stats'):
-        pmap_by_kind = dict(
-            pstats.compute(sids, [pmap.extract(r) for r in range(len(rlzs))]))
+        stats = ProbabilityMap.from_array(statfunc(array), sids)
+        pmap_by_kind = {kind: stats.extract(k)
+                        for k, kind in enumerate(statfunc.kinds)}
     if monitor.individual_curves:
         for r, rlz in enumerate(rlzs):
-            pmap_by_kind['rlz-%03d' % r] = pmap.extract(r)
+            pmap_by_kind['rlz-%03d' % r] = ProbabilityMap.from_array(
+                array[:, :, r, None], sids)
     return pmap_by_kind
 
 
@@ -492,7 +494,7 @@ class ClassicalCalculator(PSHACalculator):
             individual_curves=self.oqparam.individual_curves)
         weights = (None if self.oqparam.number_of_logic_tree_samples
                    else [rlz.weight for rlz in self.rlzs_assoc.realizations])
-        pstats = PmapStats(self.oqparam.quantile_hazard_curves, weights)
+        pstats = MQStats(self.oqparam.quantile_hazard_curves, weights)
         num_rlzs = len(self.rlzs_assoc.realizations)
         for block in self.sitecol.split_in_tiles(num_rlzs):
             pg = {int(grp): ProbabilityMap.read(poes, block.sids)

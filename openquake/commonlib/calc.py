@@ -59,12 +59,11 @@ def combine_pmaps(rlzs_assoc, pmaps):
     """
     :param rlzs_assoc: a :class:`openquake.commonlib.source.RlzsAssoc` instance
     :param pmaps: dictionary src_group_id -> probability map (same sids)
-    :returns: aggregate probability map of shape (N, L, R)
+    :returns: aggregate probability array of shape (N, L, R)
     """
     vals = list(pmaps.values())
     N, L, _ = get_shape(vals)
     R = len(rlzs_assoc.realizations)
-    sids = sorted(vals[0])
     agg = numpy.zeros((N, L, R), F64)
     for grp_id in pmaps:
         for i, gsim in enumerate(rlzs_assoc.gsims_by_grp_id[grp_id]):
@@ -72,7 +71,7 @@ def combine_pmaps(rlzs_assoc, pmaps):
             for rlz in rlzs_assoc.rlzs_assoc[grp_id, gsim]:
                 r = rlz.ordinal
                 agg[:, :, r] = 1. - (1. - agg[:, :, r]) * (1. - arr)
-    return ProbabilityMap.from_array(agg, sids)
+    return agg
 
 # ######################### hazard maps ################################### #
 
