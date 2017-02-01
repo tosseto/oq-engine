@@ -17,7 +17,7 @@ install:
   - pip install -e .[rtree,celery]
 
 script:
-  - nosetests --with-doctest -vsx -a'!slow'
+  - nosetests --with-doctest -vs -a'!slow'
   - cat /tmp/webui*
   - bin/oq info -r demos/hazard
   - bin/oq reset --yes
