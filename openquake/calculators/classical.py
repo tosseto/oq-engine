@@ -32,7 +32,7 @@ from openquake.hazardlib.geo.utils import get_longitudinal_extent
 from openquake.hazardlib.geo.geodetic import npoints_between
 from openquake.hazardlib.calc.hazard_curve import (
     pmap_from_grp, ProbabilityMap)
-from openquake.hazardlib.probability_map import PmapStats
+from openquake.hazardlib.stats import compute_stats
 from openquake.commonlib import datastore, source, calc
 from openquake.calculators import base
 
@@ -41,6 +41,15 @@ F32 = numpy.float32
 F64 = numpy.float64
 
 HazardCurve = collections.namedtuple('HazardCurve', 'location poes')
+
+
+class PmapStats(object):
+    def __init__(self, quantiles):
+        self.quantiles = quantiles
+        self.kinds = ['mean'] + ['quantile-%s' % q for q in quantiles]
+
+    def __call__(self, array, weights):
+        return compute_stats(array, self.quantiles, weights)
 
 
 def split_filter_source(src, sites, src_filter, random_seed):
@@ -421,15 +430,17 @@ def build_hcurves_and_stats(pmap_by_grp, sids, pstats, rlzs_assoc, monitor):
         return {}
     rlzs = rlzs_assoc.realizations
     with monitor('combine pmaps'):
-        pmap_by_rlz = calc.combine_pmaps(rlzs_assoc, pmap_by_grp)
+        pmap = calc.combine_pmaps(rlzs_assoc, pmap_by_grp)
     pmap_by_kind = {}
     if len(rlzs) > 1:
         with monitor('compute stats'):
-            pmap_by_kind.update(
-                pstats.compute(sids, [pmap_by_rlz[rlz] for rlz in rlzs]))
+            stats = ProbabilityMap.from_array(
+                pstats(pmap.array.T, rlzs_assoc.weights).T, pmap.sids)
+            for i, kind in enumerate(pstats.kinds):
+                pmap_by_kind[kind] = stats.extract(i)
     if monitor.individual_curves:
-        for rlz in rlzs:
-            pmap_by_kind['rlz-%03d' % rlz.ordinal] = pmap_by_rlz[rlz]
+        for r, rlz in enumerate(rlzs):
+            pmap_by_kind['rlz-%03d' % r] = pmap.extract(r)
     return pmap_by_kind
 
 
@@ -496,9 +507,7 @@ class ClassicalCalculator(PSHACalculator):
         monitor = self.monitor.new(
             'build_hcurves_and_stats',
             individual_curves=self.oqparam.individual_curves)
-        weights = (None if self.oqparam.number_of_logic_tree_samples
-                   else [rlz.weight for rlz in self.rlzs_assoc.realizations])
-        pstats = PmapStats(self.oqparam.quantile_hazard_curves, weights)
+        pstats = PmapStats(self.oqparam.quantile_hazard_curves)
         num_rlzs = len(self.rlzs_assoc.realizations)
         for block in self.sitecol.split_in_tiles(num_rlzs):
             pg = {grp_id: pmap_by_grp[grp_id].filter(block.sids)

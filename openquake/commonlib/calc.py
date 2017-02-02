@@ -22,14 +22,14 @@ import numpy
 
 from openquake.baselib import hdf5
 from openquake.baselib.python3compat import encode, decode
-from openquake.baselib.general import (
-    get_array, group_array, AccumDict)
+from openquake.baselib.general import get_array, group_array
 from openquake.hazardlib.geo.mesh import RectangularMesh, build_array
 from openquake.hazardlib.gsim.base import ContextMaker
 from openquake.hazardlib.imt import from_string
 from openquake.hazardlib import geo, tom
 from openquake.hazardlib.geo.point import Point
-from openquake.hazardlib.probability_map import ProbabilityMap, get_shape
+from openquake.hazardlib.probability_map import (
+    ProbabilityMap, ProbabilityCurve, get_shape)
 from openquake.commonlib import readinput, oqvalidation, util
 from openquake.hazardlib import valid
 
@@ -62,16 +62,28 @@ def combine_pmaps(rlzs_assoc, results):
     :param results: dictionary src_group_id -> probability map
     :returns: a dictionary rlz -> aggregate probability map
     """
+    num_rlzs = len(rlzs_assoc.realizations)
     num_levels = get_shape(results.values())[1]
     acc = {rlz: ProbabilityMap(num_levels, 1)
            for rlz in rlzs_assoc.realizations}
+    sids = set()
     for grp_id in results:
+        sids.update(results[grp_id])
         for i, gsim in enumerate(rlzs_assoc.gsims_by_grp_id[grp_id]):
             pmap = results[grp_id].extract(i)
             for rlz in rlzs_assoc.rlzs_assoc[grp_id, gsim]:
                 if rlz in acc:
                     acc[rlz] |= pmap
-    return acc
+    pm = ProbabilityMap(num_levels, num_rlzs)
+    for sid in sids:
+        pm[sid] = pc = ProbabilityCurve(numpy.zeros((num_levels, num_rlzs)))
+        for rlz, pmap in acc.items():
+            r = rlz.ordinal
+            try:
+                pc.array[:, r] = pmap[sid].array[:, 0]
+            except KeyError:  # missing sid
+                pc.array[:, r] = numpy.zeros(num_levels)
+    return pm
 
 # ######################### hazard maps ################################### #
 
