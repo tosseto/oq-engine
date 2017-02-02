@@ -30,8 +30,8 @@ from openquake.hazardlib import sourceconverter
 from openquake.hazardlib.geo.utils import get_spherical_bounding_box
 from openquake.hazardlib.geo.utils import get_longitudinal_extent
 from openquake.hazardlib.geo.geodetic import npoints_between
-from openquake.hazardlib.calc.hazard_curve import (
-    pmap_from_grp, ProbabilityMap)
+from openquake.hazardlib.probability_map import ProbabilityMap, get_shape
+from openquake.hazardlib.calc.hazard_curve import pmap_from_grp
 from openquake.hazardlib.stats import compute_stats
 from openquake.commonlib import datastore, source, calc
 from openquake.calculators import base
@@ -50,6 +50,26 @@ class PmapStats(object):
 
     def __call__(self, array, weights):
         return compute_stats(array, self.quantiles, weights)
+
+
+def get_stats(pmaps, pstats, weights, sids):
+    """
+    :param pmaps: a list of R pmaps
+    :param pstats: a callable pstats(array, weights) with .kinds attribute
+    :param weights: a list of R weights
+    :param sids: a list of S sites
+    """
+    num_levels = get_shape(pmaps)[1]
+    stats = ProbabilityMap.build(num_levels, len(pstats.kinds), sids)
+    array = numpy.zeros((len(pmaps), len(sids), num_levels), numpy.float64)
+    for r, pmap in enumerate(pmaps):
+        for i, sid in enumerate(sids):
+            if sid in pmap:
+                array[r][i] = pmap[sid].array[:, 0]
+    for i, arr in enumerate(pstats(array, weights)):
+        for j, sid in numpy.ndenumerate(sids):
+            stats[sid].array[:, i] = arr[j]
+    return stats
 
 
 def split_filter_source(src, sites, src_filter, random_seed):
@@ -430,17 +450,16 @@ def build_hcurves_and_stats(pmap_by_grp, sids, pstats, rlzs_assoc, monitor):
         return {}
     rlzs = rlzs_assoc.realizations
     with monitor('combine pmaps'):
-        pmap = calc.combine_pmaps(rlzs_assoc, pmap_by_grp)
+        pmaps = calc.combine_pmaps(rlzs_assoc, pmap_by_grp)
     pmap_by_kind = {}
     if len(rlzs) > 1:
         with monitor('compute stats'):
-            stats = ProbabilityMap.from_array(
-                pstats(pmap.array.T, rlzs_assoc.weights).T, pmap.sids)
+            stats = get_stats(pmaps, pstats, rlzs_assoc.weights, sids)
             for i, kind in enumerate(pstats.kinds):
                 pmap_by_kind[kind] = stats.extract(i)
     if monitor.individual_curves:
         for r, rlz in enumerate(rlzs):
-            pmap_by_kind['rlz-%03d' % r] = pmap.extract(r)
+            pmap_by_kind['rlz-%03d' % r] = pmaps[r]
     return pmap_by_kind
 
 
