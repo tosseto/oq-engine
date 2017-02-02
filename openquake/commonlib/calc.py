@@ -28,7 +28,7 @@ from openquake.hazardlib.gsim.base import ContextMaker
 from openquake.hazardlib.imt import from_string
 from openquake.hazardlib import geo, tom
 from openquake.hazardlib.geo.point import Point
-from openquake.hazardlib.probability_map import ProbabilityMap, get_shape
+from openquake.hazardlib.probability_map import ProbabilityMap, get_shape2
 from openquake.commonlib import readinput, oqvalidation, util
 from openquake.hazardlib import valid
 
@@ -62,10 +62,12 @@ def combine_pmaps(rlzs_assoc, pmaps):
     :returns: aggregate probability array of shape (N, L, R)
     """
     vals = list(pmaps.values())
-    N, L, _ = get_shape(vals)
+    N, L = get_shape2(vals)
     R = len(rlzs_assoc.realizations)
     agg = numpy.zeros((N, L, R), F64)
     for grp_id in pmaps:
+        if not pmaps[grp_id]:
+            continue
         for i, gsim in enumerate(rlzs_assoc.gsims_by_grp_id[grp_id]):
             arr = pmaps[grp_id].extract(i).array[:, :, 0]
             for rlz in rlzs_assoc.rlzs_assoc[grp_id, gsim]:
