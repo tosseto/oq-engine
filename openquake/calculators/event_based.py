@@ -84,7 +84,7 @@ def compute_ruptures(sources, src_filter, gsims, monitor):
     rup_mon = monitor('filtering ruptures', measuremem=False)
     num_samples = monitor.samples
     num_events = 0
-    cmaker = ContextMaker(gsims, src_filter.integration_distance)
+    cmaker = ContextMaker(gsims, src_filter)
     # Compute and save stochastic event sets
     for src, s_sites in src_filter(sources):
         t0 = time.time()
