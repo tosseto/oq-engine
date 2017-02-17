@@ -49,7 +49,8 @@ def count_eff_ruptures(sources, srcfilter, gsims, monitor):
     acc = AccumDict()
     acc.grp_id = sources[0].src_group_id
     acc.calc_times = []
-    cmaker = ContextMaker(gsims, srcfilter.integration_distance)
+    srcfilter.init()
+    cmaker = ContextMaker(gsims, srcfilter)
     count = 0
     for src in sources:
         sites = srcfilter.get_close_sites(src)
