@@ -48,6 +48,7 @@ class SerializeRuptureTestCase(unittest.TestCase):
         print('Writing on %s' % self.path)
         self.i = 0
         self.sids = numpy.array([0], numpy.uint32)
+        self.dists = numpy.array([100.])
         self.events = numpy.array([(0, 1, 1, 0)], calc.event_dt)
         self.write_read(point)
         self.write_read(char_simple)
@@ -59,7 +60,8 @@ class SerializeRuptureTestCase(unittest.TestCase):
             for rup in src.iter_ruptures():
                 rup.seed = 0
                 ebr = calc.EBRupture(
-                    rup, self.sids, self.events, src.source_id, 0, self.i)
+                    rup, self.sids, self.dists, self.events,
+                    src.source_id, 0, self.i)
                 f[str(self.i)] = ebr
                 self.i += 1
         with hdf5.File(self.path, 'r') as f:
@@ -70,12 +72,13 @@ class SerializeRuptureTestCase(unittest.TestCase):
         fh, self.path = tempfile.mkstemp(suffix='.hdf5')
         os.close(fh)
         sids = numpy.array([0], numpy.uint32)
+        dists = numpy.array([100.])
         events = numpy.array([(0, 1, 1, 0)], calc.event_dt)
         [rup_node] = nrml.read(planar)
         conv = RuptureConverter(1.0, 1.0)
         rup = conv.convert_node(rup_node)
         rup.seed = 0
-        ebr1 = calc.EBRupture(rup, sids, events, '*', 0, 0)
+        ebr1 = calc.EBRupture(rup, sids, dists, events, '*', 0, 0)
         with hdf5.File(self.path, 'w') as f:
             f['ebr'] = ebr1
         with hdf5.File(self.path, 'r') as f:
