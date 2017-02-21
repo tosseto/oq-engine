@@ -170,12 +170,11 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
         for handler in logging.root.handlers:
             handler.setFormatter(logging.Formatter(fmt))
 
-    def run(self, pre_execute=True, concurrent_tasks=None, close=True, **kw):
+    def run(self, pre_execute=True, concurrent_tasks=None, **kw):
         """
         Run the calculation and return the exported outputs.
         """
         global logversion
-        self.close = close
         self.set_log_format()
         if logversion:  # make sure this is logged only once
             logging.info('Using engine version %s', engine_version)
@@ -278,15 +277,12 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
                 self._export(('hmaps', fmt), exported)
             if has_hcurves and self.oqparam.uniform_hazard_spectra:
                 self._export(('uhs', fmt), exported)
-
-        if self.close:  # in the engine we close later
-            self.result = None
-            try:
-                self.datastore.close()
-            except (RuntimeError, ValueError):
-                # sometimes produces errors but they are difficult to
-                # reproduce
-                logging.warn('', exc_info=True)
+        try:
+            self.datastore.close()
+        except (RuntimeError, ValueError):
+            # sometimes produces errors but they are difficult to
+            # reproduce
+            logging.warn('', exc_info=True)
         return exported
 
     def _export(self, ekey, exported):
@@ -364,7 +360,7 @@ class HazardCalculator(BaseCalculator):
         precalc = calculators[self.pre_calculator](
             self.oqparam, self.monitor('precalculator'),
             self.datastore.calc_id)
-        precalc.run(close=False)
+        precalc.run()
         if 'scenario' not in self.oqparam.calculation_mode:
             self.csm = precalc.csm
         pre_attrs = vars(precalc)

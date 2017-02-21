@@ -534,7 +534,8 @@ class EventBasedCalculator(ClassicalCalculator):
             # TODO: perhaps it is possible to avoid reprocessing the source
             # model, however usually this is quite fast and do not dominate
             # the computation
-            self.cl.run(close=False)
+            self.cl.pre_execute()
+            self.cl.post_execute(self.cl.execute())
             cl_mean_curves = get_mean_curves(self.cl.datastore)
             eb_mean_curves = get_mean_curves(self.datastore)
             for imt in eb_mean_curves.dtype.names:

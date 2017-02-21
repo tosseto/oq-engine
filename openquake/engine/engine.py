@@ -216,4 +216,4 @@ def run_calc(job_id, oqparam, log_level, log_file, exports,
 def _do_run_calc(calc, exports, hazard_calculation_id, **kw):
     with calc.monitor:
         calc.run(exports=exports, hazard_calculation_id=hazard_calculation_id,
-                 close=False, **kw)  # don't close the datastore too soon
+                 **kw)
