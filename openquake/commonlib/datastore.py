@@ -420,6 +420,8 @@ class DataStore(collections.MutableMapping):
         return key in self.hdf5 or self.parent and key in self.parent.hdf5
 
     def __len__(self):
+        if not self.hdf5:  # a closed datastore is considered empty
+            return 0
         return sum(1 for f in self)
 
     def __repr__(self):
