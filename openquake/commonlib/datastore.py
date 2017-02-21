@@ -193,6 +193,8 @@ class DataStore(collections.MutableMapping):
         Reopen for reading a closed datastore
         """
         self.hdf5 = hdf5.File(self.hdf5path, mode, libver='latest')
+        if self.parent != ():
+            self.parent.reopen()
 
     def getitem(self, name):
         """

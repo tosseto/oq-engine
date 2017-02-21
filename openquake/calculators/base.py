@@ -196,6 +196,8 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
             self.result = self.execute()
             if self.result is not None:
                 self.post_execute(self.result)
+            self.close()
+            self.datastore.reopen('r+')
             self.before_export()
             exported = self.export(kw.get('exports', ''))
         except KeyboardInterrupt:
@@ -277,13 +279,16 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
                 self._export(('hmaps', fmt), exported)
             if has_hcurves and self.oqparam.uniform_hazard_spectra:
                 self._export(('uhs', fmt), exported)
+        self.close()
+        return exported
+
+    def close(self):
         try:
             self.datastore.close()
         except (RuntimeError, ValueError):
             # sometimes produces errors but they are difficult to
             # reproduce
             logging.warn('', exc_info=True)
-        return exported
 
     def _export(self, ekey, exported):
         if ekey in exp:
