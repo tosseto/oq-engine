@@ -864,8 +864,9 @@ def export_gmf_scenario_npz(ekey, dstore):
         gsims = rlzs_assoc.gsims_by_grp_id[0]  # there is a single grp_id
         E = oq.number_of_ground_motion_fields
         correl_model = oq.get_correl_model()
+        ebr = dstore['ruptures/grp-00/0']
         computer = gmf.GmfComputer(
-            dstore['ruptures/grp-00/0'], dstore['sitecol'], oq.imtls,
+            ebr, dstore['sitecol'], ebr.distances, oq.imtls,
             gsims, oq.truncation_level, correl_model)
         gmf_dt = numpy.dtype([(imt, (F32, E)) for imt in oq.imtls])
         imts = list(oq.imtls)

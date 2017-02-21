@@ -20,6 +20,7 @@ import numpy
 
 from openquake.hazardlib.calc import filters
 from openquake.hazardlib.calc.gmf import GmfComputer
+from openquake.hazardlib.gsim.base import ContextMaker
 from openquake.commonlib import readinput, source, calc
 from openquake.calculators.export.hazard import gmv_dt
 from openquake.calculators import base
@@ -43,24 +44,19 @@ class ScenarioCalculator(base.HazardCalculator):
         rup = readinput.get_rupture(oq)
         rup.seed = self.oqparam.random_seed
         self.gsims = readinput.get_gsims(oq)
-        maxdist = oq.maximum_distance['default']
+        cmaker = ContextMaker(self.gsims, oq.maximum_distance)
         with self.monitor('filtering sites', autoflush=True):
-            self.sitecol = filters.filter_sites_by_distance_to_rupture(
-                rup, maxdist, self.sitecol)
-        if self.sitecol is None:
-            raise RuntimeError(
-                'All sites were filtered out! maximum_distance=%s km' %
-                maxdist)
+            self.sitecol, dists = cmaker.get_closest(self.sitecol, rup)
         # eid, ses, occ, sample
         events = numpy.array(
             [(eid, 1, 1, 0)
              for eid in range(oq.number_of_ground_motion_fields)],
             calc.event_dt)
         rupture = calc.EBRupture(
-            rup, self.sitecol.sids, events, 'single_rupture', 0, 0)
+            rup, self.sitecol.sids, dists, events, 'single_rupture', 0, 0)
         self.datastore['ruptures/grp-00/0'] = rupture
         self.computer = GmfComputer(
-            rupture, self.sitecol, oq.imtls, self.gsims,
+            rupture, self.sitecol, dists, oq.imtls, self.gsims,
             trunc_level, correl_model)
         gsim_lt = readinput.get_gsim_lt(oq)
         cinfo = source.CompositionInfo.fake(gsim_lt)
