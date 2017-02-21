@@ -170,7 +170,7 @@ def build_eb_ruptures(
                 events.append((0, ses_idx, occ_no, sampleid))
         if events:
             yield calc.EBRupture(
-                rup, r_sites.indices,
+                rup, r_sites.indices, dists,
                 numpy.array(events, calc.event_dt),
                 src.source_id, src.src_group_id, serial)
 

@@ -470,9 +470,11 @@ class EBRupture(object):
               'source_class', 'pmf', 'occurrence_rate',
               'time_span', 'rupture_slip_direction']
 
-    def __init__(self, rupture, sids, events, source_id, grp_id, serial):
+    def __init__(self, rupture, sids, distances, events,
+                 source_id, grp_id, serial):
         self.rupture = rupture
         self.sids = sids
+        self.distances = distances
         self.events = events
         self.source_id = source_id
         self.grp_id = grp_id
@@ -583,11 +585,14 @@ class EBRupture(object):
                 arr = build_array(
                     [[mesh.lons, mesh.lats, mesh.depths]]).reshape(shp)
         attrs['nbytes'] = self.sids.nbytes + self.events.nbytes + arr.nbytes
-        return dict(sids=self.sids, events=self.events, mesh=arr), attrs
+        dic = dict(sids=self.sids, distances=self.distances,
+                   events=self.events, mesh=arr)
+        return dic, attrs
 
     def __fromh5__(self, dic, attrs):
         attrs = dict(attrs)
         self.sids = dic['sids'].value
+        self.distances = dic['distances'].value
         self.events = dic['events'].value
         surface_class = attrs['surface_class']
         surface_cls = hdf5.dotname2cls(surface_class)

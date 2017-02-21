@@ -508,7 +508,7 @@ class GmfGetter(object):
             sites = site.FilteredSiteCollection(
                 ebr.sids, self.sitecol.complete)
             computer = calc.gmf.GmfComputer(
-                ebr, sites, self.imts, self.gsims,
+                ebr, sites, ebr.distances, self.imts, self.gsims,
                 self.truncation_level, self.correlation_model)
             self.computers.append(computer)
         self.gmfbytes = 0
