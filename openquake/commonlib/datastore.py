@@ -188,6 +188,12 @@ class DataStore(collections.MutableMapping):
         for name, value in params:
             self.attrs[name] = value
 
+    def reopen(self, mode='r'):
+        """
+        Reopen for reading a closed datastore
+        """
+        self.hdf5 = hdf5.File(self.hdf5path, mode, libver='latest')
+
     def getitem(self, name):
         """
         Return a dataset by using h5py.File.__getitem__
