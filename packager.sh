@@ -323,7 +323,7 @@ _devtest_innervm_run () {
                      set -x
                  fi
                  export PYTHONPATH=\"\$PWD/oq-hazardlib:\$PWD/oq-engine\"
-                 cd oq-engine; bin/oq dbserver start &
+                 cd oq-engine
                  nosetests -v -a '${skip_tests}' --with-xunit --xunit-file=xunit-engine.xml --with-coverage --cover-package=openquake.engine --with-doctest openquake/engine/tests/
                  nosetests -v -a '${skip_tests}' --with-xunit --xunit-file=xunit-server.xml --with-coverage --cover-package=openquake.server --with-doctest openquake/server/tests/
 
@@ -604,7 +604,7 @@ celeryd_wait $GEM_MAXLOOP"
         ssh $lxc_ip "oq engine --make-html-report today
         oq engine --delete-calculation 1 --yes
         oq engine --dc 1 --yes
-        oq purge -1; oq purge 0"
+        oq purge -1; oq reset --yes"
         scp "${lxc_ip}:jobs-*.html" "out_${BUILD_UBUVER}/"
     fi
 

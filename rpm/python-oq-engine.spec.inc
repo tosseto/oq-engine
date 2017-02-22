@@ -30,7 +30,7 @@ Patch1: openquake.cfg.patch
 Requires(pre): shadow-utils
 
 %define common_deps sudo systemd python numpy scipy python-shapely python-psutil python-decorator python-mock python-futures h5py python-amqp python-celery python-django pyshp python-docutils python-requests python-prctl python-gunicorn rabbitmq-server
-%define oqlib_deps python-oq-hazardlib >= 0.23.0
+%define oqlib_deps python-oq-hazardlib >= 0.24.0
 %define dev_deps python-nose python-coverage
 
 Requires: %{common_deps}
@@ -54,13 +54,6 @@ compute seismic hazard and seismic risk of earthquakes on a global scale.
 
 Copyright (C) 2010-2017 GEM Foundation
 
-%pre
-getent group %{oquser} >/dev/null || groupadd -r %{oquser}
-getent passwd %{oquser} >/dev/null || \
-    useradd -r -g %{oquser} -m -d /var/lib/%{oquser} -s /bin/bash \
-    -c "The OpenQuake user" %{oquser}
-exit 0
-
 %prep
 %if %{oqstable} == 1
 %setup -n %{oqrepo}-%{oqversion} -n %{oqrepo}-%{oqversion}
@@ -76,6 +69,13 @@ python setup.py build
 %check
 #nosetests -v -a '!slow' --with-doctest --with-coverage --cover-package=openquake.engine
 
+%pre
+getent group %{oquser} >/dev/null || groupadd -r %{oquser}
+getent passwd %{oquser} >/dev/null || \
+    useradd -r -g %{oquser} -m -d /var/lib/%{oquser} -s /bin/bash \
+    -c "The OpenQuake user" %{oquser}
+systemctl start rabbitmq-server.service
+
 %install
 sed -i "s/^__version__[  ]*=.*/__version__ = '%{oqversion}-%{oqrelease}'/g" openquake/risklib/__init__.py
 python setup.py install --single-version-externally-managed -O1 --root=%{buildroot} --record=INSTALLED_FILES
@@ -83,7 +83,7 @@ python setup.py install --single-version-externally-managed -O1 --root=%{buildro
 mkdir -p %{buildroot}%{_sysconfdir}/openquake
 mkdir -p %{buildroot}%{_datadir}/openquake/engine
 mkdir -p %{buildroot}%{_unitdir}
-install -m 644 openquake.cfg %{buildroot}/%{_sysconfdir}/openquake
+install -m 644 openquake/engine/openquake.cfg %{buildroot}/%{_sysconfdir}/openquake
 install -m 644 rpm/systemd/openquake-dbserver.service %{buildroot}%{_unitdir}/openquake-dbserver.service
 install -m 644 rpm/systemd/openquake-webui.service %{buildroot}%{_unitdir}/openquake-webui.service
 install -m 644 rpm/systemd/openquake-celery.service %{buildroot}%{_unitdir}/openquake-celery.service
@@ -91,6 +91,16 @@ cp -R demos %{buildroot}/%{_datadir}/openquake/engine
 cp -R utils %{buildroot}/%{_datadir}/openquake/engine
 
 %post
+(if [ -f /run/rabbitmq/pid -o -f /var/lib/rabbitmq/mnesia/rabbit@$(hostname -s).pid ]; then
+    if ! rabbitmqctl list_users | grep openquake; then
+        rabbitmqctl add_user openquake openquake
+    fi
+    if ! rabbitmqctl list_vhosts | grep openquake; then
+        rabbitmqctl add_vhost openquake
+        rabbitmqctl set_permissions -p openquake openquake ".*" ".*" ".*"
+    fi
+fi) >/dev/null || true
+systemctl stop rabbitmq-server.service
 %systemd_post openquake-dbserver.service
 %systemd_post openquake-webui.service
 %systemd_post openquake-celery.service

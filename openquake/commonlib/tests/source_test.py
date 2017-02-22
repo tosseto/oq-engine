@@ -727,7 +727,7 @@ class RuptureConverterTestCase(unittest.TestCase):
     <simpleFaultRupture>
         <magnitude>7.65</magnitude>
         <rake>15.0</rake>
-        <hypocenter lon="0.0" lat="0.0" depth="-5.0"/>
+        <hypocenter lon="0.0" lat="91.0" depth="5.0"/>
         <simpleFaultGeometry>
                 <gml:LineString>
                     <gml:posList>
@@ -904,7 +904,8 @@ xmlns:gml="http://www.opengis.net/gml"
             reference_depth_to_1pt0km_per_sec=100.,
             reference_depth_to_2pt5km_per_sec=5.0,
             reference_backarc=False)
-        sitecol = site.SiteCollection.from_points([102.32], [-2.9107], mod)
+        sitecol = site.SiteCollection.from_points(
+            [102.32], [-2.9107], [0], mod)
         parser = nrml.SourceModelParser(s.SourceConverter(
             investigation_time=50.,
             rupture_mesh_spacing=1,  # km

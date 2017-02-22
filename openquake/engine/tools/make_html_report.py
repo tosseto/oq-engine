@@ -17,6 +17,7 @@
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import sys
 import cgi
 import time
 from datetime import date, datetime, timedelta
@@ -25,7 +26,7 @@ from docutils.examples import html_parts
 
 from openquake.commonlib.datastore import read
 from openquake.calculators.views import view_fullreport
-from openquake.engine.logs import dbcmd
+from openquake.commonlib.logs import dbcmd
 
 tablecounter = itertools.count(0)
 
@@ -184,7 +185,9 @@ def make_report(isodate='today'):
 
     page = make_tabs(tag_ids, tag_status, tag_contents) + (
         'Report last updated: %s' % datetime.now())
+    if sys.version[0] == '2':  # Python 2
+        page = page.encode('utf-8')
     fname = 'jobs-%s.html' % isodate
     with open(fname, 'w') as f:
-        f.write(PAGE_TEMPLATE % page.encode('utf-8'))
+        f.write(PAGE_TEMPLATE % page)
     return fname

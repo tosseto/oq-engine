@@ -1,4 +1,57 @@
   [Michele Simionato]
+  * `oq info --report` now filters the ruptures and reports the correct
+    number of effective ruptures even for classical calculators
+  * Stripped the TRT information from the event loss table CSV export
+    and optimized its performance
+  * Fixed a bug when storing the GMPE logic tree file in the datastore
+  * Added a command `oq run_tiles` (experimental)
+  * Fixed the event based calculator so that it can run UCERF ruptures
+  * Fixed a bug in the scenario_risk calculator in case of multiple assets
+    of the same taxonomy on the same site with no insurance losses
+  * Now the event IDs are generated in the workers in the event based calculator
+    and there is a limit of 65536 tasks with 65536 ruptures each
+  * Changed the UCERF classical calculators to compute one branch at the time
+  * Fixed the header `occupants:float32` in the CSV risk exports involving
+    occupants
+  * Fixed the name of the zipped files downloaded by the Web UI: there
+    was a spurious dot
+  * Fixed the UCERF classical calculator in the case of sampling
+  * Reduced the size of the event tags in the event based calculators, thus
+    saving GB of disk space in UCERF calculations
+  * Fixed the name of the files downloaded by the Web UI: they must not
+    contain slashes
+  * Now deleting a calculation from the Web UI really deletes it, before
+    if was only hiding it
+
+  [Daniele Viganò]
+  * Moved the OpenQuake Engine manual sources inside doc/manual
+
+  [Michele Simionato]
+  * Introduced an experimental classical time dependent UCERF calculator
+  * Added a dynamic output for source group information
+  * Changed the UCERF rupture calculator to fully store the ruptures
+  * Fixed a bug in `combine_maps`: realizations with zero probability were
+    discarded, thus breaking the computation of the statistics
+  * Added a command `oq reset` to reset database and datastores
+  * Reduced the data transfer back and disk space occupation for UCERF
+    event based risk calculations
+  * Tasks meant to be used with a shared directory are now marked with a
+    boolean attribute `.shared_dir_on`
+  * Added a warning when running event based risk calculations with sampling
+  * Made sure that the openquake.cfg file is read only once
+
+  [Daniele Viganò]
+  * Moved the openquake.cfg config file inside the python package
+    under openquake/engine/openquake.cfg
+  * Removed support to OQ_LOCAL_CFG_PATH and OQ_SITE_CFG_PATH vars;
+    only the OQ_CONFIG_FILE enviroment variable is read
+
+  [Michele Simionato]
+  * If there is a single realization, do not compute the statistics
+  * Changed the separator from comma to tab for the output `ruptures`
+  * If there are no conditional_loss_poes, the engine does not try to
+    export the loss maps anymore
+  * Fixed `oq engine --make-html-report` when using Python 3
   * Fixed bug when running `oq info job.ini` with NRML 0.5 source models
 
 python-oq-engine (2.2.0-0~precise01) precise; urgency=low
