@@ -147,9 +147,17 @@ def export_ses_csv(ekey, dstore):
     rows = []
     for grp_id, trt in sorted(grp_trt.items()):
         sm = 'sm-%04d' % sm_by_grp[grp_id]
-        etags = build_etags(dstore['events/' + sm])
+        try:
+            events = dstore['events/' + sm]
+        except KeyError:  # source model producing no events
+            continue
+        etags = build_etags(events)
         dic = groupby(etags, util.get_serial)
-        for r in dstore['rup_data/grp-%02d' % grp_id]:
+        try:
+            dset = dstore['rup_data/grp-%02d' % grp_id]
+        except KeyError:  # group with no events
+            continue
+        for r in dset:
             for etag in dic[r['rupserial']]:
                 boundary = 'MULTIPOLYGON(%s)' % r['boundary']
                 rows.append(

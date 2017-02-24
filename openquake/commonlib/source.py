@@ -353,8 +353,7 @@ class CompositionInfo(object):
                     self.trts[trti], id=grp_id, eff_ruptures=effrup)
                 for grp_id, trti, effrup, sm_id in tdata if effrup]
             path = tuple(str(decode(rec['path'])).split('_'))
-            trts = set(sg.trt for sg in srcgroups)
-            num_gsim_paths = self.gsim_lt.reduce(trts).get_num_paths()
+            num_gsim_paths = self.gsim_lt.get_num_paths()
             sm = logictree.SourceModel(
                 rec['name'], rec['weight'], path, srcgroups,
                 num_gsim_paths, sm_id, rec['samples'])
@@ -369,8 +368,7 @@ class CompositionInfo(object):
             return sum(self.get_num_rlzs(sm) for sm in self.source_models)
         if self.num_samples:
             return source_model.samples
-        trts = set(sg.trt for sg in source_model.src_groups)
-        return self.gsim_lt.reduce(trts).get_num_paths()
+        return self.gsim_lt.get_num_paths()
 
     def get_rlzs_assoc(self, count_ruptures=None):
         """
@@ -389,7 +387,9 @@ class CompositionInfo(object):
             for sg in smodel.src_groups:
                 if count_ruptures:
                     sg.eff_ruptures = count_ruptures(sg)
-                if sg.eff_ruptures:
+                    if sg.eff_ruptures:
+                        trts.add(sg.trt)
+                else:
                     trts.add(sg.trt)
             # recompute the GSIM logic tree if needed
             if trtset != trts:

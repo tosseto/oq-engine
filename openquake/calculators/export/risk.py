@@ -21,7 +21,6 @@ import collections
 
 import numpy
 
-from openquake.baselib import hdf5
 from openquake.baselib.python3compat import decode
 from openquake.baselib.general import AccumDict, get_array, group_array
 from openquake.risklib import scientific, riskinput
@@ -52,7 +51,11 @@ def rup_data_dict(dstore, grp_ids):
     """
     rdict = {}
     for grp_id in grp_ids:
-        for rec in dstore['rup_data/grp-%02d' % grp_id]:
+        try:
+            data = dstore['rup_data/grp-%02d' % grp_id]
+        except KeyError:  # group producing no ruptures
+            continue
+        for rec in data:
             rdict[rec['rupserial']] = rec
     return rdict
 

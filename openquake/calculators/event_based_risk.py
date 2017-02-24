@@ -458,15 +458,15 @@ class EbriskCalculator(base.RiskCalculator):
             ruptures_by_grp[grp].sort(key=operator.attrgetter('serial'))
         num_rlzs = 0
         allres = []
-        source_models = self.csm.info.source_models
+        #source_models = self.csm.info.source_models
         self.sm_by_grp = self.csm.info.get_sm_by_grp()
         for i, args in enumerate(self.gen_args(ruptures_by_grp)):
             ires = self.start_tasks(*args)
             allres.append(ires)
             ires.rlz_slice = slice(num_rlzs, num_rlzs + ires.num_rlzs)
             num_rlzs += ires.num_rlzs
-            for sg in source_models[i].src_groups:
-                sg.eff_ruptures = ires.num_ruptures.get(sg.id, 0)
+            #for sg in source_models[i].src_groups:
+            #    sg.eff_ruptures = ires.num_ruptures.get(sg.id, 0)
         self.datastore['csm_info'] = self.csm.info
         self.datastore.flush()  # when killing the computation
         # the csm_info arrays were stored but not the attributes;
