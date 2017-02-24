@@ -298,8 +298,9 @@ class PSHACalculator(base.HazardCalculator):
         acc = reduce(self.agg_dicts, res, self.zerodict())
         with self.monitor('store source_info', autoflush=True):
             self.store_source_info(self.csm.infos)
-        self.rlzs_assoc = self.csm.info.get_rlzs_assoc(
-            partial(self.count_eff_ruptures, acc))
+        if not self.is_stochastic:  # possibly reduce the logic tree
+            self.rlzs_assoc = self.csm.info.get_rlzs_assoc(
+                partial(self.count_eff_ruptures, acc))
         self.datastore['csm_info'] = self.csm.info
         return acc
 
