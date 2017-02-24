@@ -125,16 +125,13 @@ class EventBasedRiskTestCase(CalculatorTestCase):
     def test_case_4(self):
         # Turkey with SHARE logic tree
         out = self.run_calc(case_4.__file__, 'job.ini',
-                            exports='csv', individual_curves='true')
+                            exports='csv', individual_curves='false')
         [fname] = export(('avg_losses-stats', 'csv'), self.calc.datastore)
         self.assertEqualFiles('expected/avg_losses-mean.csv', fname)
-        if OLD_NUMPY:
-            raise unittest.SkipTest('numpy too old to export agg_loss_table')
 
-        fnames = out['agg_loss_table', 'csv']
-        assert fnames, 'No agg_losses exported??'
-        for fname in fnames:
-            self.assertEqualFiles('expected/' + strip_calc_id(fname), fname)
+        # check the portfolio losses
+        fname = writetmp(view('portfolio_loss', self.calc.datastore))
+        self.assertEqualFiles('expected/portfolio_loss.txt', fname, delta=1E-5)
 
         # this is a case without loss_ratios in the .ini file
         # we check that no risk curves are generated
