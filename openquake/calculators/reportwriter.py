@@ -30,7 +30,7 @@ import time
 from openquake.baselib import parallel
 from openquake.baselib.general import humansize, AccumDict
 from openquake.baselib.python3compat import encode
-from openquake.hazardlib.gsim.base import ContextMaker, FarAwayRupture
+from openquake.hazardlib.calc.filters import FarAwayRupture
 from openquake.commonlib import readinput
 from openquake.calculators.classical import PSHACalculator
 from openquake.calculators import views
@@ -49,14 +49,15 @@ def count_eff_ruptures(sources, srcfilter, gsims, monitor):
     acc = AccumDict()
     acc.grp_id = sources[0].src_group_id
     acc.calc_times = []
-    cmaker = ContextMaker(gsims, srcfilter.integration_distance)
+    idist = srcfilter.integration_distance
     count = 0
     for src in sources:
         sites = srcfilter.get_close_sites(src)
         if sites is not None:
-            for rup in src.iter_ruptures():
+            for i, rup in enumerate(src.iter_ruptures()):
+                rup.serial = src.serial[i]  # added for debugging purposes
                 try:
-                    cmaker.get_closest(sites, rup)
+                    idist.get_closest(sites, rup)
                 except FarAwayRupture:
                     continue
                 else:
@@ -92,10 +93,11 @@ class ReportWriter(object):
         self.dstore = dstore
         self.oq = oq = dstore['oqparam']
         self.text = (decode(oq.description) + '\n' + '=' * len(oq.description))
-        info = dstore['job_info']
+        info = {decode(k): decode(v)
+                for k, v in dict(dstore['job_info']).items()}
         dpath = dstore.hdf5path
         mtime = os.path.getmtime(dpath)
-        host = '%s:%s' % (info.hostname, decode(dpath))
+        host = '%s:%s' % (info['hostname'], decode(dpath))
         updated = str(time.ctime(mtime))
         versions = sorted(dstore['/'].attrs.items())
         self.text += '\n\n' + views.rst_table([[host, updated]] + versions)
@@ -172,6 +174,7 @@ def build_report(job_ini, output_dir=None):
     # some taken is care so that the real calculation is not run:
     # the goal is to extract information about the source management only
     with mock.patch.object(PSHACalculator, 'core_task', count_eff_ruptures):
+        PSHACalculator.is_stochastic = True  # to call .init_serials()
         if calc.pre_calculator == 'ebrisk':
             # compute the ruptures only, not the risk
             calc.pre_calculator = 'event_based_rupture'

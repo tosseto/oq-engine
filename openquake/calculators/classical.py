@@ -283,7 +283,7 @@ class PSHACalculator(base.HazardCalculator):
             maximum_distance=oq.maximum_distance,
             disagg=oq.poes_disagg or oq.iml_disagg,
             ses_per_logic_tree_path=oq.ses_per_logic_tree_path,
-            seed=oq.random_seed)
+            seed=oq.ses_seed)
         with self.monitor('managing sources', autoflush=True):
             allargs = self.gen_args(self.csm, monitor)
             iterargs = saving_sources_by_task(allargs, self.datastore)
@@ -296,7 +296,6 @@ class PSHACalculator(base.HazardCalculator):
             res = parallel.Starmap(
                 self.core_task.__func__, iterargs).submit_all()
         acc = reduce(self.agg_dicts, res, self.zerodict())
-        self.save_data_transfer(res)
         with self.monitor('store source_info', autoflush=True):
             self.store_source_info(self.csm.infos)
         self.rlzs_assoc = self.csm.info.get_rlzs_assoc(
@@ -323,7 +322,6 @@ class PSHACalculator(base.HazardCalculator):
                 gsims = self.rlzs_assoc.gsims_by_grp_id[sg.id]
                 if oq.poes_disagg or oq.iml_disagg:  # only for disaggregation
                     monitor.sm_id = self.rlzs_assoc.sm_ids[sg.id]
-                monitor.seed = self.rlzs_assoc.seed
                 monitor.samples = self.rlzs_assoc.samples[sg.id]
                 for block in self.csm.split_sources(
                         sg.sources, self.src_filter, maxweight):
@@ -444,7 +442,6 @@ class ClassicalCalculator(PSHACalculator):
                 build_hcurves_and_stats,
                 list(self.gen_args(pmap_by_grp))).submit_all()
         nbytes = reduce(self.save_hcurves, res, AccumDict())
-        self.save_data_transfer(res)
         return nbytes
 
     def gen_args(self, pmap_by_grp):
