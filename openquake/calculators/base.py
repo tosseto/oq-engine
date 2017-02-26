@@ -415,6 +415,7 @@ class HazardCalculator(BaseCalculator):
             logging.info('Filtering composite source model')
             # we are also weighting the sources, but weighting is ultrafast
             csm = csm.filter(self.src_filter)
+            self.src_filter.save_sids(self.datastore.ext5path)
         return csm
 
     def pre_execute(self):
