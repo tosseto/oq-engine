@@ -75,11 +75,10 @@ def convert_UCERFSource(self, node):
 SourceConverter.convert_UCERFSource = convert_UCERFSource
 
 
-def ucerf_classical_hazard_by_rupture_set(
-        ucerf_source, src_filter, gsims, monitor):
+def ucerf_classical(ucerf_source, src_filter, gsims, monitor):
     """
     :param ucerf_source:
-        an object taking the place of a source for UCERF
+        an object taking the place of a source with an attribute .rupset_idx
     :param src_filter:
         a source filter returning the sites affected by the source
     :param gsims:
@@ -130,7 +129,7 @@ def ucerf_classical_hazard_by_rupture_set(
         (ucerf_source.source_id, nsites, time.time() - t0))
     return pmap
 
-ucerf_classical_hazard_by_rupture_set.shared_dir_on = config.SHARED_DIR_ON
+ucerf_classical.shared_dir_on = config.SHARED_DIR_ON
 
 
 @base.calculators.add('ucerf_psha')
@@ -138,7 +137,7 @@ class UcerfPSHACalculator(classical.PSHACalculator):
     """
     UCERF classical calculator.
     """
-    core_task = ucerf_classical_hazard_by_rupture_set
+    core_task = ucerf_classical
     is_stochastic = False
 
     def pre_execute(self):
@@ -210,15 +209,16 @@ class UcerfPSHACalculator(classical.PSHACalculator):
             # parallelize by rupture subsets
             rup_sets = numpy.arange(ucerf_source.num_ruptures)
             task_args = []
-            for rup_set in split_in_blocks(rup_sets, ct2):
+            for i, rup_set in enumerate(split_in_blocks(rup_sets, ct2)):
                 src = copy.copy(ucerf_source)
+                src.source_id += ':%d' % i
                 src.rupset_idx = rup_set
                 src.num_ruptures = len(rup_set)
                 task_args.append((src, self.src_filter, gsims, monitor))
-            taskname = 'ucerf_classical_hazard_by_rupture_set_%d' % grp_id
+            taskname = 'ucerf_classical_%d' % grp_id
             acc = parallel.Starmap(
-                ucerf_classical_hazard_by_rupture_set, task_args,
-                name=taskname).reduce(self.agg_dicts, acc)
+                ucerf_classical, task_args, name=taskname
+            ).reduce(self.agg_dicts, acc)
 
             # compose probabilities from background sources
             for pmap in bg_res:
