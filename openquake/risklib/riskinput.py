@@ -515,7 +515,8 @@ class GmfGetter(object):
 
     def __call__(self, rlz):
         gsim = self.gsims[rlz.ordinal]
-        gmfdict = collections.defaultdict(dict)
+        gmfdict = collections.defaultdict(
+            lambda: [[] for _ in range(len(self.imts))])
         for computer in self.computers:
             rup = computer.rupture
             if self.samples > 1:
@@ -528,16 +529,14 @@ class GmfGetter(object):
                 for eid, gmf in zip(eids, array[imti].T):
                     for sid, gmv in zip(computer.sites.sids, gmf):
                         if gmv > min_gmv:
-                            dic = gmfdict[sid]
-                            if imt in dic:
-                                dic[imt].append((gmv, eid))
-                            else:
-                                dic[imt] = [(gmv, eid)]
+                            lst = gmfdict[sid]
+                            lst[imti].append((gmv, eid))
         for sid in self.sids:
-            dic = gmfdict[sid]
-            for imt in dic:
-                dic[imt] = arr = numpy.array(dic[imt], self.dt)
-                self.gmfbytes += arr.nbytes
+            dic = {}
+            for imt, lst in zip(self.imts, gmfdict[sid]):
+                if lst:
+                    dic[imt] = arr = numpy.array(lst, self.dt)
+                    self.gmfbytes += arr.nbytes
             yield dic
 
     def get(self, rlz):
