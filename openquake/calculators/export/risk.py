@@ -22,6 +22,7 @@ import collections
 import numpy
 
 from openquake.baselib import hdf5
+from openquake.baselib.python3compat import decode
 from openquake.baselib.general import AccumDict, get_array, group_array
 from openquake.risklib import scientific, riskinput
 from openquake.calculators.export import export
@@ -44,7 +45,7 @@ def add_quotes(values):
     return numpy.array(['"%s"' % val for val in values], (bytes, 100))
 
 
-def rup_data_dict(dstore, grp_ids, grp_trt):
+def rup_data_dict(dstore, grp_ids):
     """
     Extract a dictionary of arrays keyed by the rupture serial number
     from the datastore for the given source group IDs.
@@ -52,7 +53,7 @@ def rup_data_dict(dstore, grp_ids, grp_trt):
     rdict = {}
     for grp_id in grp_ids:
         for rec in dstore['rup_data/grp-%02d' % grp_id]:
-            rdict[rec['rupserial']] = rec, grp_trt[grp_id]
+            rdict[rec['rupserial']] = rec
     return rdict
 
 
@@ -63,12 +64,12 @@ def copy_to(elt, rup_data, rupserials):
     """
     assert len(elt) == len(rupserials), (len(elt), len(rupserials))
     for i, serial in numpy.ndenumerate(rupserials):
-        rdata, trt = rup_data[serial]
-        elt[i]['tectonic_region_type'] = trt
-        elt[i]['magnitude'] = rdata['mag']
-        elt[i]['centroid_lon'] = rdata['lon']
-        elt[i]['centroid_lat'] = rdata['lat']
-        elt[i]['centroid_depth'] = rdata['depth']
+        rec = elt[i]
+        rdata = rup_data[serial]
+        rec['magnitude'] = rdata['mag']
+        rec['centroid_lon'] = rdata['lon']
+        rec['centroid_lat'] = rdata['lat']
+        rec['centroid_depth'] = rdata['depth']
 
 # ############################### exporters ############################## #
 
@@ -190,16 +191,16 @@ def export_agg_losses_ebr(ekey, dstore):
     loss_types = dstore.get_attr('composite_risk_model', 'loss_types')
     name, ext = export.keyfunc(ekey)
     agg_losses = dstore[name]
+    has_rup_data = 'rup_data' in dstore
+    extra_list = [('magnitude', F64),
+                  ('centroid_lon', F64),
+                  ('centroid_lat', F64),
+                  ('centroid_depth', F64)] if has_rup_data else []
     oq = dstore['oqparam']
     csm_info = dstore['csm_info']
     dtlist = [('event_tag', (numpy.string_, 100)),
               ('year', U32),
-              ('tectonic_region_type', hdf5.vstr),
-              ('magnitude', F64),
-              ('centroid_lon', F64),
-              ('centroid_lat', F64),
-              ('centroid_depth', F64),
-              ] + oq.loss_dt_list()
+              ] + extra_list + oq.loss_dt_list()
     elt_dt = numpy.dtype(dtlist)
     rlzs_assoc = dstore['csm_info'].get_rlzs_assoc()
     sm_ids = sorted(rlzs_assoc.rlzs_by_smodel)
@@ -213,46 +214,29 @@ def export_agg_losses_ebr(ekey, dstore):
         if not len(events):
             continue
         rup_data = rup_data_dict(
-            dstore, csm_info.get_grp_ids(sm_id), csm_info.grp_trt())
+            dstore, csm_info.get_grp_ids(sm_id)) if has_rup_data else {}
+        event_by_eid = {event['eid']: event for event in events}
         for rlz in rlzs:
-            dest = dstore.build_fname('agg_losses', rlz, 'csv')
-            eids = set()
             rlzname = 'rlz-%03d' % rlz.ordinal
             if rlzname not in agg_losses:
                 continue
-            for loss_type in agg_losses[rlzname]:
-                dset = agg_losses['%s/%s' % (rlzname, loss_type)]
-                eids.update(dset['eid'])
-            eids = sorted(eids)
-            rlz_events = events[eids]
-            eid2idx = dict(zip(eids, range(len(eids))))
+            data = agg_losses[rlzname].value
+            eids = data['eid']
+            losses = data['loss']
+            rlz_events = numpy.array([event_by_eid[eid] for eid in eids])
             elt = numpy.zeros(len(eids), elt_dt)
             elt['event_tag'] = build_etags(rlz_events)
             elt['year'] = rlz_events['year']
-            copy_to(elt, rup_data, rlz_events['rupserial'])
-            for loss_type in loss_types:
-                elt_lt = elt[loss_type]
-                if oq.insured_losses:
-                    elt_lt_ins = elt[loss_type + '_ins']
-                key = 'rlz-%03d/%s' % (rlz.ordinal, loss_type)
-                if key not in agg_losses:  # nothing was saved for this key
-                    continue
-                data = agg_losses[key].value
-                for i, eid in numpy.ndenumerate(data['eid']):
-                    idx = eid2idx[eid]
-                    if oq.insured_losses:
-                        elt_lt[idx] = data['loss'][i, 0]
-                        elt_lt_ins[idx] = data['loss'][i, 1]
-                    else:
-                        elt_lt[idx] = data['loss'][i]
+            if rup_data:
+                copy_to(elt, rup_data, rlz_events['rupserial'])
+            for i, ins in enumerate(
+                    ['', '_ins'] if oq.insured_losses else ['']):
+                for l, loss_type in enumerate(loss_types):
+                    elt[loss_type + ins][:] = losses[:, l, i]
             elt.sort(order=['year', 'event_tag'])
+            dest = dstore.build_fname('agg_losses', rlz, 'csv')
             writer.save(elt, dest)
     return writer.getsaved()
-
-
-def group_by_aid(data, loss_type):
-    return {aid: AccumDict({loss_type: rec['loss']})
-            for aid, [rec] in group_array(data, 'aid').items()}
 
 
 # this is used by event_based_risk
@@ -264,7 +248,6 @@ def export_all_loss_ratios(ekey, dstore):
     """
     loss_types = dstore.get_attr('composite_risk_model', 'loss_types')
     name, ext = export.keyfunc(ekey)
-    ass_losses = dstore[name]
     assetcol = dstore['assetcol']
     oq = dstore['oqparam']
     dtlist = [('event_tag', (numpy.string_, 100)), ('year', U32),
@@ -276,32 +259,33 @@ def export_all_loss_ratios(ekey, dstore):
         return []
     sm_id, eid = int(sm_id), int(eid)
     sm_ids = [sm_id]
-    zero = [0, 0] if oq.insured_losses else 0
     writer = writers.CsvWriter(fmt=writers.FIVEDIGITS)
     for sm_id in sm_ids:
         rlzs = rlzs_assoc.rlzs_by_smodel[sm_id]
-        try:
-            event = dstore['events/sm-%04d' % sm_id][eid]
-        except KeyError:
+        events = dstore['events/sm-%04d' % sm_id]
+        ok_events = events[events['eid'] == eid]
+        if len(ok_events) == 0:
             continue
-        [event_tag] = build_etags([event])
+        [event_tag] = build_etags(ok_events)
         for rlz in rlzs:
             exportname = 'losses-sm=%04d-eid=%d' % (sm_id, eid)
             dest = dstore.build_fname(exportname, rlz, 'csv')
             losses_by_aid = AccumDict()
             rlzname = 'rlz-%03d' % rlz.ordinal
-            for loss_type in ass_losses[rlzname]:
-                data = get_array(ass_losses['%s/%s' % (rlzname, loss_type)],
-                                 eid=eid)
-                losses_by_aid += group_by_aid(data, loss_type)
+            with dstore.ext5() as ext5:
+                ass_losses = ext5['all_loss_ratios'][rlzname].value
+            data = get_array(ass_losses, eid=eid)
+            losses_by_aid = group_array(data, 'aid')
             elt = numpy.zeros(len(losses_by_aid), elt_dt)
             elt['event_tag'] = event_tag
-            elt['year'] = event['year']
+            elt['year'] = ok_events[0]['year']
             elt['aid'] = sorted(losses_by_aid)
             for i, aid in numpy.ndenumerate(elt['aid']):
-                for loss_type in loss_types:
+                # there is a single eid
+                losses = losses_by_aid[aid]['loss'][0, :, :]  # shape (L, I)
+                for l, loss_type in enumerate(loss_types):
                     value = assetcol[int(aid)].value(loss_type, oq.time_event)
-                    loss = value * losses_by_aid[aid].get(loss_type, zero)
+                    loss = value * losses[l]
                     if oq.insured_losses:
                         elt[loss_type][i] = loss[0]
                         elt[loss_type + '_ins'][i] = loss[1]
@@ -364,7 +348,7 @@ def export_damage(ekey, dstore):
         rlz = rlzs[r]
         dd_asset = []
         for n, ass in enumerate(assetcol):
-            assref = aref[ass['idx']]
+            assref = decode(aref[ass['idx']])
             dist = dmg_by_asset[n, r][lt]
             site = Site(ass['lon'], ass['lat'])
             for ds in range(D):
@@ -678,7 +662,7 @@ def export_loss_maps_rlzs_xml_geojson(ekey, dstore):
                     poe_str = 'poe-%s' % poe + ins
                     for ass, stat in zip(assetcol, lmaps[poe_str]):
                         loc = Location(ass['lon'], ass['lat'])
-                        lm = LossMap(loc, aref[ass['idx']], stat, None)
+                        lm = LossMap(loc, decode(aref[ass['idx']]), stat, None)
                         data.append(lm)
                     writer = writercls(
                         fname, oq.investigation_time, poe=poe, loss_type=lt,
@@ -714,7 +698,7 @@ def export_loss_maps_stats_xml_geojson(ekey, dstore):
         poe_str = 'poe-%s' % poe + ins
         for ass, val in zip(assetcol, array[poe_str]):
             loc = Location(ass['lon'], ass['lat'])
-            curve = LossMap(loc, aref[ass['idx']], val, None)
+            curve = LossMap(loc, decode(aref[ass['idx']]), val, None)
             curves.append(curve)
         writer.serialize(curves)
         fnames.append(writer._dest)
@@ -754,7 +738,7 @@ def export_loss_map_xml_geojson(ekey, dstore):
                 for ass, mean, stddev in zip(
                         assetcol, means[:, r], stddevs[:, r]):
                     loc = Location(ass['lon'], ass['lat'])
-                    lm = LossMap(loc, aref[ass['idx']], mean, stddev)
+                    lm = LossMap(loc, decode(aref[ass['idx']]), mean, stddev)
                     data.append(lm)
                 writer = writercls(
                     fname, oq.investigation_time, poe=None, loss_type=lt,
@@ -901,7 +885,7 @@ def export_loss_curves_stats(ekey, dstore):
         curves = []
         for ass, rec in zip(assetcol, array):
             loc = Location(ass['lon'], ass['lat'])
-            curve = LossCurve(loc, aref[ass['idx']], rec['poes' + ins],
+            curve = LossCurve(loc, decode(aref[ass['idx']]), rec['poes' + ins],
                               rec['losses' + ins], loss_ratios[ltype],
                               rec['avg' + ins], None)
             curves.append(curve)
@@ -1028,7 +1012,7 @@ def export_bcr_map_rlzs(ekey, dstore):
             data = []
             for ass, value in zip(assetcol, rlz_data):
                 loc = Location(ass['lon'], ass['lat'])
-                data.append(BcrData(loc, aref[ass['idx']],
+                data.append(BcrData(loc, decode(aref[ass['idx']]),
                                     value['annual_loss_orig'],
                                     value['annual_loss_retro'],
                                     value['bcr']))

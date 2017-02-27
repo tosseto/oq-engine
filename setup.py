@@ -63,7 +63,7 @@ install_requires = [
     'requests >=2.2, <2.13',
     # pyshp is fragile, we want only versions we have tested
     'pyshp >=1.2.3, <1.2.11',
-    'openquake.hazardlib ==0.22',
+    'openquake.hazardlib ==0.24',
 ]
 
 if sys.version < '3':
@@ -72,6 +72,7 @@ if sys.version < '3':
     )
 
 extras_require = {
+    'prctl': ["python-prctl ==1.6.1"],
     'rtree':  ["Rtree >=0.8.2, <0.8.4"],
     'celery':  ["celery >=3.1, <4.0"],
     'plotting':  ["matplotlib >=1.5"],
@@ -84,8 +85,7 @@ setup(
     author_email="devops@openquake.org",
     maintainer='GEM Foundation',
     maintainer_email='devops@openquake.org',
-    description=("Computes hazard, risk and socio-economic impact of "
-                 "earthquakes."),
+    description=("Computes earthquake hazard and risk."),
     license="AGPL3",
     keywords="earthquake seismic hazard risk",
     url=url,
